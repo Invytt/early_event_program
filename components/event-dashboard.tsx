@@ -2,6 +2,7 @@
 
 import * as React from "react"
 import Link from "next/link"
+import { useRouter } from "next/navigation"
 import {
   ArrowLeftIcon,
   CalendarIcon,
@@ -10,12 +11,29 @@ import {
   CheckIcon,
   XIcon,
   Share2Icon,
+  Trash2Icon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from "@/components/ui/alert-dialog"
 import { Donut } from "@/components/charts"
-import { RsvpChart } from "@/components/rsvp-chart"
-import type { EventInvite, Guest, GuestStatus, Activity } from "@/lib/events"
+import { RsvpChart, type SeriesPoint } from "@/components/rsvp-chart"
+import {
+  approveRsvpAction,
+  rejectRsvpAction,
+  deleteEventAction,
+} from "@/app/actions/events"
+import type { EventView, GuestView, RsvpStatus, ActivityView } from "@/lib/events"
 
 const PALETTE = [
   "bg-amber-500", "bg-rose-500", "bg-indigo-500", "bg-emerald-500",
@@ -23,20 +41,23 @@ const PALETTE = [
 ]
 const initials = (n: string) => n.split(" ").map((w) => w[0]).join("")
 
-function Avatar({ name, i }: { name: string; i: number }) {
+function Avatar({ name, seed }: { name: string; seed: string }) {
+  let h = 0
+  for (let i = 0; i < seed.length; i++) h = (h * 31 + seed.charCodeAt(i)) >>> 0
   return (
     <span
-      className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${PALETTE[i % PALETTE.length]}`}
+      className={`flex size-8 shrink-0 items-center justify-center rounded-full text-xs font-medium text-white ${PALETTE[h % PALETTE.length]}`}
     >
       {initials(name)}
     </span>
   )
 }
 
-const statusStyles: Record<GuestStatus, string> = {
+const statusStyles: Record<RsvpStatus, string> = {
   Going: "bg-green-500/15 text-green-700 border-green-600/30",
   Pending: "bg-amber-500/15 text-amber-700 border-amber-600/30",
   Declined: "bg-rose-500/15 text-rose-700 border-rose-600/30",
+  Waitlist: "bg-blue-500/15 text-blue-700 border-blue-600/30",
 }
 
 export function EventDashboard({
@@ -49,27 +70,41 @@ export function EventDashboard({
   daysAway,
   activity,
 }: {
-  event: EventInvite
-  initialGuests: Guest[]
+  event: EventView
+  initialGuests: GuestView[]
   capacity: number
-  series: number[]
+  series: SeriesPoint[]
   dateLabel: string
   timeLabel: string
   daysAway: number
-  activity: Activity[]
+  activity: ActivityView[]
 }) {
-  const [guests, setGuests] = React.useState<Guest[]>(initialGuests)
-  const [filter, setFilter] = React.useState<"All" | GuestStatus>("All")
+  const [guests, setGuests] = React.useState<GuestView[]>(initialGuests)
+  const [filter, setFilter] = React.useState<"All" | RsvpStatus>("All")
   const [tab, setTab] = React.useState<"Overview" | "Approval queue" | "Guest list">("Overview")
   const [copied, setCopied] = React.useState(false)
+  const [deleting, setDeleting] = React.useState(false)
+  const router = useRouter()
+
+  function runDelete() {
+    setDeleting(true)
+    deleteEventAction(event.id)
+      .then(() => router.push("/dashboard/my-invitations"))
+      .catch(() => setDeleting(false))
+  }
 
   const going = guests.filter((g) => g.status === "Going").length
   const pending = guests.filter((g) => g.status === "Pending").length
   const declined = guests.filter((g) => g.status === "Declined").length
   const pct = Math.min(100, Math.round((going / capacity) * 100))
 
-  function decide(id: number, status: GuestStatus) {
+  function decide(id: string, status: RsvpStatus) {
     setGuests((gs) => gs.map((g) => (g.id === id ? { ...g, status } : g)))
+    const run = status === "Going" ? approveRsvpAction : rejectRsvpAction
+    run(id, event.id).catch(() => {
+      // revert on failure
+      setGuests((gs) => gs.map((g) => (g.id === id ? { ...g, status: "Pending" } : g)))
+    })
   }
 
   const queue = guests.filter((g) => g.status === "Pending")
@@ -89,7 +124,14 @@ export function EventDashboard({
       <div
         className={`relative flex min-h-40 flex-col justify-end gap-3 overflow-hidden rounded-xl bg-gradient-to-br ${event.cover} p-5 text-white`}
       >
-        <div className="flex flex-wrap items-end justify-between gap-3">
+        {event.coverUrl && (
+          <>
+            {/* eslint-disable-next-line @next/next/no-img-element */}
+            <img src={event.coverUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            <div className="absolute inset-0 bg-black/40" />
+          </>
+        )}
+        <div className="relative flex flex-wrap items-end justify-between gap-3">
           <div>
             <span className="rounded-full bg-black/25 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
               {daysAway > 0 ? `In ${daysAway} day${daysAway === 1 ? "" : "s"}` : daysAway === 0 ? "Today" : "Past event"}
@@ -104,7 +146,7 @@ export function EventDashboard({
               className="gap-1.5"
               onClick={() => {
                 navigator.clipboard?.writeText(
-                  `${typeof window !== "undefined" ? window.location.origin : ""}/dashboard/invites/${event.id}`
+                  `${typeof window !== "undefined" ? window.location.origin : ""}/e/${event.slug}`
                 )
                 setCopied(true)
                 setTimeout(() => setCopied(false), 1500)
@@ -113,9 +155,36 @@ export function EventDashboard({
               <Share2Icon className="size-4" />
               {copied ? "Copied!" : "Share"}
             </Button>
+            <AlertDialog>
+              <AlertDialogTrigger asChild>
+                <Button size="sm" variant="secondary" className="gap-1.5 text-red-600">
+                  <Trash2Icon className="size-4" />
+                  Delete
+                </Button>
+              </AlertDialogTrigger>
+              <AlertDialogContent>
+                <AlertDialogHeader>
+                  <AlertDialogTitle>Delete this event?</AlertDialogTitle>
+                  <AlertDialogDescription>
+                    &ldquo;{event.name}&rdquo; and all its RSVPs will be permanently
+                    removed. This can&apos;t be undone.
+                  </AlertDialogDescription>
+                </AlertDialogHeader>
+                <AlertDialogFooter>
+                  <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+                  <AlertDialogAction
+                    onClick={runDelete}
+                    disabled={deleting}
+                    className="bg-red-600 text-white hover:bg-red-600/90"
+                  >
+                    {deleting ? "Deleting…" : "Delete event"}
+                  </AlertDialogAction>
+                </AlertDialogFooter>
+              </AlertDialogContent>
+            </AlertDialog>
           </div>
         </div>
-        <div className="flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/90">
+        <div className="relative flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/90">
           <span className="flex items-center gap-1.5"><CalendarIcon className="size-4" />{dateLabel}</span>
           <span className="flex items-center gap-1.5"><ClockIcon className="size-4" />{timeLabel}</span>
           <span className="flex items-center gap-1.5"><MapPinIcon className="size-4" />{event.location}</span>
@@ -165,7 +234,7 @@ export function EventDashboard({
       <section className="rounded-xl border border-border bg-[var(--paper-2)] p-5">
         <div className="mb-4">
           <h2 className="font-semibold">RSVPs over time</h2>
-          <p className="text-sm text-muted-foreground">Cumulative going, since invites were sent</p>
+          <p className="text-sm text-muted-foreground">How many people responded each day</p>
         </div>
         <RsvpChart series={series} />
       </section>
@@ -223,7 +292,7 @@ export function EventDashboard({
             <ul className="flex flex-col divide-y divide-border">
               {queue.map((g) => (
                 <li key={g.id} className="flex items-center gap-3 py-2.5">
-                  <Avatar name={g.name} i={g.id} />
+                  <Avatar name={g.name} seed={g.id} />
                   <span className="flex flex-col">
                     <span className="text-sm font-medium">{g.name}</span>
                     <span className="text-xs text-muted-foreground">Requested {g.when}</span>
@@ -272,7 +341,7 @@ export function EventDashboard({
         <ul className="flex flex-col divide-y divide-border">
           {shown.map((g) => (
             <li key={g.id} className="flex items-center gap-3 py-2.5">
-              <Avatar name={g.name} i={g.id} />
+              <Avatar name={g.name} seed={g.id} />
               <span className="flex flex-col">
                 <span className="text-sm font-medium">{g.name}</span>
                 <span className="text-xs text-muted-foreground">{g.when}</span>

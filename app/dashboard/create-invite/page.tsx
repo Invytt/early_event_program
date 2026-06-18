@@ -1,7 +1,10 @@
 "use client"
 
 import * as React from "react"
+import { useRouter } from "next/navigation"
 
+import { createEventAction, uploadCoverAction } from "@/app/actions/events"
+import { generateEventDescription } from "@/app/actions/ai"
 import {
   Card,
   CardContent,
@@ -37,16 +40,19 @@ import {
   UsersIcon,
   ShieldCheckIcon,
   EyeOffIcon,
+  SparklesIcon,
 } from "lucide-react"
 
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"))
 
 export default function CreateInvitePage() {
+  const router = useRouter()
   const [cover, setCover] = React.useState<string | null>(null)
   const [name, setName] = React.useState("")
   const [description, setDescription] = React.useState("")
   const [location, setLocation] = React.useState("")
+  const [place, setPlace] = React.useState<{ placeId?: string; lat?: number; lng?: number }>({})
   const [capacity, setCapacity] = React.useState("")
   const [date, setDate] = React.useState<Date | undefined>(undefined)
   const [hour, setHour] = React.useState("")
@@ -54,7 +60,27 @@ export default function CreateInvitePage() {
   const [period, setPeriod] = React.useState("")
   const [requireApproval, setRequireApproval] = React.useState(false)
   const [hideLocation, setHideLocation] = React.useState(false)
+  const [submitting, setSubmitting] = React.useState(false)
+  const [error, setError] = React.useState<string | null>(null)
+  const [aiLoading, setAiLoading] = React.useState(false)
   const fileRef = React.useRef<HTMLInputElement>(null)
+
+  async function fillWithAi() {
+    if (!name.trim()) {
+      setError("Add an event name before using AI.")
+      return
+    }
+    setError(null)
+    setAiLoading(true)
+    const res = await generateEventDescription({
+      name,
+      location,
+      dateLabel: date ? format(date, "EEE, MMM d") : undefined,
+    })
+    setAiLoading(false)
+    if (res.ok) setDescription(res.text)
+    else setError(res.error)
+  }
 
   const timeLabel = hour && minute && period ? `${hour}:${minute} ${period}` : ""
 
@@ -70,20 +96,59 @@ export default function CreateInvitePage() {
     if (file) setCover(URL.createObjectURL(file))
   }
 
-  function onSubmit(e: React.FormEvent<HTMLFormElement>) {
+  async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
-    // TODO: wire to backend
-    console.log({
+    setError(null)
+    if (!date) {
+      setError("Pick a date for the event.")
+      return
+    }
+    const t = time24()
+    const dt = new Date(date)
+    if (t) {
+      const [h, m] = t.split(":").map(Number)
+      dt.setHours(h, m, 0, 0)
+    } else {
+      dt.setHours(0, 0, 0, 0)
+    }
+
+    setSubmitting(true)
+
+    // upload cover first (if chosen)
+    let coverUrl: string | undefined
+    const file = fileRef.current?.files?.[0]
+    if (file) {
+      const fd = new FormData()
+      fd.append("cover", file)
+      const up = await uploadCoverAction(fd)
+      if (!up.ok) {
+        setError(up.error)
+        setSubmitting(false)
+        return
+      }
+      coverUrl = up.url
+    }
+
+    const res = await createEventAction({
       name,
       description,
       location,
+      placeId: place.placeId,
+      lat: place.lat,
+      lng: place.lng,
       capacity: capacity ? Number(capacity) : null,
-      date: date ? format(date, "yyyy-MM-dd") : null,
-      time: time24(),
       requireApproval,
       hideLocation,
-      cover: (fileRef.current?.files?.[0] as File) ?? null,
+      startsAt: dt.toISOString(),
+      timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
+      coverUrl,
     })
+    if (res.ok) {
+      router.push(`/dashboard/events/${res.id}`)
+    } else {
+      setError(res.error)
+      setSubmitting(false)
+    }
   }
 
   return (
@@ -164,7 +229,18 @@ export default function CreateInvitePage() {
 
               {/* Event description */}
               <div className="flex flex-col gap-2">
-                <Label htmlFor="description">Event description</Label>
+                <div className="flex items-center justify-between">
+                  <Label htmlFor="description">Event description</Label>
+                  <button
+                    type="button"
+                    onClick={fillWithAi}
+                    disabled={aiLoading}
+                    className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground disabled:opacity-50"
+                  >
+                    <SparklesIcon className="size-3.5" />
+                    {aiLoading ? "Writing…" : "Fill with AI"}
+                  </button>
+                </div>
                 <Textarea
                   id="description"
                   value={description}
@@ -181,6 +257,9 @@ export default function CreateInvitePage() {
                   id="location"
                   value={location}
                   onChange={setLocation}
+                  onPlace={(p) =>
+                    setPlace({ placeId: p.placeId, lat: p.lat, lng: p.lng })
+                  }
                   placeholder="Search for a place…"
                   required
                 />
@@ -289,10 +368,10 @@ export default function CreateInvitePage() {
                 >
                   <span className="flex flex-col gap-0.5">
                     <span className="text-sm font-medium">
-                      Hide location until RSVP
+                      Hide location until approval
                     </span>
                     <span className="text-sm text-muted-foreground">
-                      Reveal the venue only after a guest RSVPs.
+                      Reveal the venue only after you approve a guest.
                     </span>
                   </span>
                   <Switch
@@ -304,11 +383,16 @@ export default function CreateInvitePage() {
               </div>
             </CardContent>
 
-            <CardFooter className="justify-end gap-2">
-              <Button type="reset" variant="outline">
-                Reset
-              </Button>
-              <Button type="submit">Create invite</Button>
+            <CardFooter className="flex-col items-stretch gap-3">
+              {error && <p className="text-sm text-destructive">{error}</p>}
+              <div className="flex justify-end gap-2">
+                <Button type="reset" variant="outline" disabled={submitting}>
+                  Reset
+                </Button>
+                <Button type="submit" disabled={submitting}>
+                  {submitting ? "Creating…" : "Create invite"}
+                </Button>
+              </div>
             </CardFooter>
           </Card>
         </form>
@@ -399,7 +483,7 @@ function EventPreview({
           icon={<MapPinIcon className="size-4" />}
           label={
             hideLocation
-              ? "Location revealed after RSVP"
+              ? "Location revealed after approval"
               : location || "Event location"
           }
           muted={!hideLocation && !location}
@@ -435,7 +519,7 @@ function EventPreview({
           {hideLocation && (
             <PreviewPill
               icon={<EyeOffIcon className="size-3.5" />}
-              text="Location hidden until RSVP"
+              text="Location hidden until approval"
             />
           )}
         </div>

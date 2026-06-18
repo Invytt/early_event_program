@@ -3,6 +3,15 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* center Clerk modal vertically */
+.cl-modalBackdrop {
+  align-items: center !important;
+}
+.cl-modalContent {
+  margin-top: 0 !important;
+  margin-bottom: 0 !important;
+}
+
 :root {
   --paper: #ecebe6;
   --paper-2: #e6e4dd;
@@ -120,6 +129,9 @@ body {
 
 .nav-right {
   justify-self: end;
+  display: flex;
+  align-items: center;
+  gap: 12px;
   text-transform: uppercase;
 }
 .nav-right a {

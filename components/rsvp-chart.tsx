@@ -10,17 +10,16 @@ import {
   type ChartConfig,
 } from "@/components/ui/chart"
 
-const LABELS = ["6w out", "5w out", "4w out", "3w out", "2w out", "1w out", "3d out", "Event"]
-
 const config = {
-  going: { label: "Going", color: "var(--chart-3)" },
+  rsvps: { label: "RSVPs", color: "var(--chart-3)" },
 } satisfies ChartConfig
 
-export function RsvpChart({ series }: { series: number[] }) {
-  const data = series.map((going, i) => ({
-    label: LABELS[i] ?? `P${i + 1}`,
-    going,
-  }))
+export type SeriesPoint = { label: string; value: number }
+
+export function RsvpChart({ series }: { series: SeriesPoint[] }) {
+  const data = series.map((p) => ({ label: p.label, rsvps: p.value }))
+  // thin x-axis ticks when there are many days
+  const interval = data.length > 14 ? Math.ceil(data.length / 8) - 1 : 0
 
   return (
     <ChartContainer config={config} className="aspect-auto h-44 w-full">
@@ -31,17 +30,15 @@ export function RsvpChart({ series }: { series: number[] }) {
           tickLine={false}
           axisLine={false}
           tickMargin={8}
+          interval={interval}
         />
-        <ChartTooltip
-          cursor={false}
-          content={<ChartTooltipContent indicator="line" />}
-        />
+        <ChartTooltip cursor={false} content={<ChartTooltipContent indicator="line" />} />
         <Line
-          dataKey="going"
+          dataKey="rsvps"
           type="monotone"
-          stroke="var(--color-going)"
+          stroke="var(--color-rsvps)"
           strokeWidth={2}
-          dot={{ r: 3 }}
+          dot={data.length <= 14 ? { r: 3 } : false}
           activeDot={{ r: 5 }}
         />
       </LineChart>

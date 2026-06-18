@@ -64,12 +64,14 @@ export function LocationAutocomplete({
   id,
   value,
   onChange,
+  onPlace,
   placeholder,
   required,
 }: {
   id?: string
   value: string
   onChange: (v: string) => void
+  onPlace?: (p: { placeId?: string; lat?: number; lng?: number; address: string }) => void
   placeholder?: string
   required?: boolean
 }) {
@@ -122,7 +124,14 @@ export function LocationAutocomplete({
             const { results } = await geocoderRef.current.geocode({
               location: pos,
             })
-            if (results?.[0]) onChange(results[0].formatted_address)
+            if (results?.[0]) {
+              onChange(results[0].formatted_address)
+              onPlace?.({
+                lat: pos.lat(),
+                lng: pos.lng(),
+                address: results[0].formatted_address,
+              })
+            }
           } catch {
             /* ignore reverse-geocode failure */
           }
@@ -203,6 +212,7 @@ export function LocationAutocomplete({
       const { results } = await new Geocoder().geocode({ placeId: s.id })
       const loc = results?.[0]?.geometry?.location
       if (!loc) return
+      onPlace?.({ placeId: s.id, lat: loc.lat(), lng: loc.lng(), address: s.full })
       const apply = () => {
         const map = mapRef.current
         if (!map) return false

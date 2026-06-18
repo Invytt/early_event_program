@@ -11,6 +11,9 @@ export default function Home() {
           <span className="scriptle">Early Events</span>
         </div>
         <div className="nav-right">
+          <Show when="signed-in">
+            <UserButton />
+          </Show>
           <Show when="signed-out">
             <SignUpButton
               mode="modal"
@@ -21,7 +24,9 @@ export default function Home() {
             </SignUpButton>
           </Show>
           <Show when="signed-in">
-            <UserButton />
+            <a href="/dashboard">
+              <button className="nav-cta">Get Started ↗</button>
+            </a>
           </Show>
         </div>
       </nav>
@@ -64,9 +69,11 @@ export default function Home() {
           </div>
 
           <p className="tv-caption">
-            Join the early event program 
+            Join the early event program to host events
             <br />
-            to host early events and get access to exclusive host features,
+             early with us and get access to
+            <br />
+           exclusive host features,
             <br />
             and help us build the future of event hosting.
           </p>
