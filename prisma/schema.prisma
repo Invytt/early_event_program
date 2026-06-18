@@ -1,0 +1,54 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum RsvpStatus {
+  Going
+  Pending
+  Declined
+  Waitlist
+}
+
+model Event {
+  id              String   @id @default(cuid())
+  ownerId         String // Clerk user id of the host
+  name            String
+  description     String?
+  locationText    String?
+  placeId         String?
+  lat             Float?
+  lng             Float?
+  coverUrl        String?
+  startsAt        DateTime
+  timezone        String?
+  capacity        Int?
+  requireApproval Boolean  @default(false)
+  hideLocation    Boolean  @default(false)
+  slug            String   @unique
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  rsvps Rsvp[]
+
+  @@index([ownerId])
+}
+
+model Rsvp {
+  id         String     @id @default(cuid())
+  eventId    String
+  userId     String? // Clerk user id, if signed in
+  guestName  String?
+  guestEmail String?
+  status     RsvpStatus @default(Going)
+  createdAt  DateTime   @default(now())
+  updatedAt  DateTime   @updatedAt
+
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
+
+  @@unique([eventId, userId])
+  @@index([eventId])
+}
