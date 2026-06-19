@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { auth } from "@clerk/nextjs/server"
@@ -129,8 +130,15 @@ export default async function DashboardPage() {
               >
                 <div className="flex h-full overflow-hidden rounded-xl border border-border bg-[var(--paper-2)] transition-shadow group-hover:shadow-md">
                   {next.dto.coverUrl ? (
-                    // eslint-disable-next-line @next/next/no-img-element
-                    <img src={next.dto.coverUrl} alt="" className="w-36 shrink-0 object-cover" />
+                    <div className="relative w-36 shrink-0">
+                      <Image
+                        src={next.dto.coverUrl}
+                        alt=""
+                        fill
+                        sizes="144px"
+                        className="object-cover"
+                      />
+                    </div>
                   ) : (
                     <div className={`w-36 shrink-0 bg-gradient-to-br ${next.dto.cover}`} />
                   )}

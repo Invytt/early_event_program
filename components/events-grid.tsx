@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { format } from "date-fns"
 import { SearchIcon } from "lucide-react"
@@ -63,8 +64,15 @@ export function EventsGrid({
             <Link key={e.id} href={`${hrefBase}/${e.id}`} className="group">
               <div className="overflow-hidden rounded-xl border border-border bg-[var(--paper-2)] transition-shadow group-hover:shadow-md">
                 {e.coverUrl ? (
-                  // eslint-disable-next-line @next/next/no-img-element
-                  <img src={e.coverUrl} alt="" className="h-32 w-full object-cover" />
+                  <div className="relative h-32 w-full">
+                    <Image
+                      src={e.coverUrl}
+                      alt=""
+                      fill
+                      sizes="(max-width: 640px) 100vw, (max-width: 1280px) 50vw, 33vw"
+                      className="object-cover"
+                    />
+                  </div>
                 ) : (
                   <div className={`h-32 w-full bg-gradient-to-br ${e.cover}`} />
                 )}

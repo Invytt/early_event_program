@@ -1,3 +1,4 @@
+import Image from "next/image"
 import Link from "next/link"
 import { notFound } from "next/navigation"
 import { format } from "date-fns"
@@ -55,8 +56,13 @@ export default async function InviteDetailPage({
         )} p-5`}
       >
         {event.coverUrl && (
-          // eslint-disable-next-line @next/next/no-img-element
-          <img src={event.coverUrl} alt="" className="absolute inset-0 size-full object-cover" />
+          <Image
+            src={event.coverUrl}
+            alt=""
+            fill
+            sizes="(max-width: 768px) 100vw, 768px"
+            className="object-cover"
+          />
         )}
         {myStatus && (
           <span className="relative rounded-full border border-white/40 bg-black/20 px-3 py-1 text-xs font-medium text-white backdrop-blur-sm">

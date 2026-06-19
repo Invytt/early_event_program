@@ -1,5 +1,7 @@
 import "server-only"
 
+import { reportError } from "@/lib/observability"
+
 const API = "https://api.autosend.com/v1/mails/send"
 
 function from() {
@@ -52,18 +54,20 @@ export async function sendEmail(opts: {
       body: JSON.stringify(body),
     })
     if (!res.ok) {
-      console.error("[email] send failed", res.status, await res.text().catch(() => ""))
+      reportError("email.send", `${res.status} ${await res.text().catch(() => "")}`)
     }
   } catch (e) {
-    console.error("[email] send error", e)
+    reportError("email.send", e)
   }
 }
 
 /* ---------- templates ---------- */
 
-const wrap = (body: string) =>
-  `<div style="font-family:ui-sans-serif,system-ui,sans-serif;max-width:520px;margin:auto;color:#1c1b19">${body}<hr style="border:none;border-top:1px solid #e6e4dd;margin:24px 0"/><p style="font-size:12px;color:#8a877f">Invytt · Early Event Program</p></div>`
-
+if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_APP_URL) {
+  console.error(
+    "[email] NEXT_PUBLIC_APP_URL is not set in production — email links will point to localhost."
+  )
+}
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")
 
 export function rsvpConfirmationEmail(args: {
@@ -99,32 +103,79 @@ export function rsvpConfirmationEmail(args: {
 
 export function approvalDecisionEmail(args: {
   to: Recipient
+  guestName?: string
+  eventId: string
   eventName: string
+  whenLabel: string
   approved: boolean
 }) {
+  const subject = args.approved
+    ? `You’re in - ${args.eventName}`
+    : `Update on your RSVP - ${args.eventName}`
+  const templateId = (process.env.AUTOSEND_TEMPLATE3_ID || "").trim()
+  if (!templateId) {
+    console.warn("[email] AUTOSEND_TEMPLATE3_ID not set — skipping decision email")
+    return Promise.resolve()
+  }
   return sendEmail({
     to: args.to,
-    subject: `${args.approved ? "You're in" : "Update"} — ${args.eventName}`,
-    html: wrap(
-      args.approved
-        ? `<h2 style="margin:0 0 12px">You're approved 🎉</h2><p>The host approved your spot for <b>${args.eventName}</b>. You're confirmed!</p>`
-        : `<h2 style="margin:0 0 12px">RSVP update</h2><p>Unfortunately your request for <b>${args.eventName}</b> wasn't approved this time.</p>`
-    ),
+    subject,
+    templateId,
+    dynamicData: {
+      subject,
+      accent: args.approved ? "#15803d" : "#b91c1c",
+      guest_name: args.guestName || args.to.name || "there",
+      event_name: args.eventName,
+      when: args.whenLabel,
+      status: args.approved ? "Approved · you’re going" : "Not approved",
+      note: args.approved
+        ? "Good news — the host approved your request. You’re confirmed for the event below. See you there!"
+        : "The host wasn’t able to approve your request for this event this time. Thanks for your interest.",
+      cta_url: args.approved
+        ? `${APP_URL}/dashboard/invites/${args.eventId}`
+        : `${APP_URL}/dashboard/invites`,
+      cta_label: args.approved ? "View your invite" : "Browse invites",
+      unsubscribe: `mailto:${process.env.EMAIL_FROM || "events@invytt.com"}?subject=Unsubscribe`,
+    },
   })
 }
 
 export function hostNewRsvpEmail(args: {
   to: Recipient
+  hostName?: string
+  eventId: string
   eventName: string
   guestName: string
+  whenLabel: string
   pending: boolean
 }) {
+  const subject = `New ${args.pending ? "request" : "RSVP"} - ${args.eventName}`
+  const templateId = (process.env.AUTOSEND_TEMPLATE2_ID || "").trim()
+  if (!templateId) {
+    console.warn("[email] AUTOSEND_TEMPLATE2_ID not set — skipping host notification")
+    return Promise.resolve()
+  }
   return sendEmail({
     to: args.to,
-    subject: `New ${args.pending ? "request" : "RSVP"} — ${args.eventName}`,
-    html: wrap(
-      `<h2 style="margin:0 0 12px">${args.guestName} ${args.pending ? "requested to join" : "is going"}</h2>
-       <p><b>${args.eventName}</b>${args.pending ? " — review them in your approval queue." : ""}</p>`
-    ),
+    subject,
+    templateId,
+    dynamicData: {
+      subject,
+      accent: args.pending ? "#b45309" : "#15803d",
+      host_name: args.hostName || "there",
+      guest_name: args.guestName,
+      event_name: args.eventName,
+      when: args.whenLabel,
+      status: args.pending ? "Pending approval" : "Going",
+      note: args.pending
+        ? `${args.guestName} has requested to join your event and needs your approval. Open the approval queue to approve or decline.`
+        : `${args.guestName} just RSVP’d to your event. You can see all responses in your dashboard.`,
+      // approval-needed → straight to the event's approval queue; otherwise the dashboard
+      cta_url: args.pending
+        ? `${APP_URL}/dashboard/events/${args.eventId}`
+        : `${APP_URL}/dashboard`,
+      cta_label: args.pending ? "Review request" : "Open dashboard",
+      unsubscribe: `mailto:${process.env.EMAIL_FROM || "events@invytt.com"}?subject=Unsubscribe`,
+    },
   })
 }

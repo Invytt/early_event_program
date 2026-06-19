@@ -60,6 +60,9 @@ export default function CreateInvitePage() {
   const [period, setPeriod] = React.useState("")
   const [requireApproval, setRequireApproval] = React.useState(false)
   const [hideLocation, setHideLocation] = React.useState(false)
+  const [emailGuestRsvp, setEmailGuestRsvp] = React.useState(true)
+  const [emailHostRsvp, setEmailHostRsvp] = React.useState(true)
+  const [emailDecision, setEmailDecision] = React.useState(true)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
   const [aiLoading, setAiLoading] = React.useState(false)
@@ -139,6 +142,9 @@ export default function CreateInvitePage() {
       capacity: capacity ? Number(capacity) : null,
       requireApproval,
       hideLocation,
+      emailGuestRsvp,
+      emailHostRsvp,
+      emailDecision,
       startsAt: dt.toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       coverUrl,
@@ -235,6 +241,7 @@ export default function CreateInvitePage() {
                     type="button"
                     onClick={fillWithAi}
                     disabled={aiLoading}
+                    aria-label="Generate event description with AI"
                     className="flex items-center gap-1.5 rounded-md px-2 py-1 text-xs font-medium text-muted-foreground transition-colors hover:bg-black/5 hover:text-foreground disabled:opacity-50"
                   >
                     <SparklesIcon className="size-3.5" />
@@ -344,8 +351,15 @@ export default function CreateInvitePage() {
                 </div>
               </div>
 
-              {/* Options */}
-              <div className="flex flex-col gap-3 border-t border-border pt-6">
+              {/* Event settings */}
+              <div className="flex flex-col gap-4 border-t border-border pt-6">
+                <div className="flex flex-col gap-1">
+                  <Label>Event settings</Label>
+                  <span className="text-sm text-muted-foreground">
+                    Control how guests join this event.
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 pl-4">
                 <label
                   htmlFor="requireApproval"
                   className="flex items-center justify-between gap-4"
@@ -380,6 +394,67 @@ export default function CreateInvitePage() {
                     onCheckedChange={setHideLocation}
                   />
                 </label>
+                </div>
+              </div>
+
+              {/* Notification settings */}
+              <div className="flex flex-col gap-4 border-t border-border pt-6">
+                <div className="flex flex-col gap-1">
+                  <Label>Notification settings</Label>
+                  <span className="text-sm text-muted-foreground">
+                    Choose which transactional emails get sent.
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 pl-4">
+                <label
+                  htmlFor="emailGuestRsvp"
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Guest RSVP confirmation</span>
+                    <span className="text-sm text-muted-foreground">
+                      Email the guest when they RSVP.
+                    </span>
+                  </span>
+                  <Switch
+                    id="emailGuestRsvp"
+                    checked={emailGuestRsvp}
+                    onCheckedChange={setEmailGuestRsvp}
+                  />
+                </label>
+                <label
+                  htmlFor="emailHostRsvp"
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Host notification</span>
+                    <span className="text-sm text-muted-foreground">
+                      Email you when a guest RSVPs.
+                    </span>
+                  </span>
+                  <Switch
+                    id="emailHostRsvp"
+                    checked={emailHostRsvp}
+                    onCheckedChange={setEmailHostRsvp}
+                  />
+                </label>
+                <label
+                  htmlFor="emailDecision"
+                  className="flex items-center justify-between gap-4"
+                >
+                  <span className="flex flex-col gap-0.5">
+                    <span className="text-sm font-medium">Approval decision</span>
+                    <span className="text-sm text-muted-foreground">
+                      Email the guest when you approve or decline them.
+                    </span>
+                  </span>
+                  <Switch
+                    id="emailDecision"
+                    checked={emailDecision}
+                    onCheckedChange={setEmailDecision}
+                  />
+                </label>
+                </div>
               </div>
             </CardContent>
 

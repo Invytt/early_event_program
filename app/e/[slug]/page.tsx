@@ -1,3 +1,5 @@
+import type { Metadata } from "next"
+import Image from "next/image"
 import { notFound } from "next/navigation"
 import { format } from "date-fns"
 import { auth } from "@clerk/nextjs/server"
@@ -13,6 +15,35 @@ import {
 import { PublicRsvp } from "@/components/public-rsvp"
 import { getEventBySlug } from "@/lib/db"
 import { formatTime, coverGradient } from "@/lib/events"
+
+export async function generateMetadata({
+  params,
+}: {
+  params: Promise<{ slug: string }>
+}): Promise<Metadata> {
+  const { slug } = await params
+  const data = await getEventBySlug(slug)
+  if (!data) return { title: "Event not found" }
+  const { event } = data
+  const title = event.name
+  // keep it generic — never leak a hidden location in shared previews
+  const description = `You're invited — ${format(event.startsAt, "EEEE, MMMM d, yyyy")}.`
+  return {
+    title,
+    description,
+    openGraph: {
+      title,
+      description,
+      type: "website",
+      images: event.coverUrl ? [{ url: event.coverUrl }] : undefined,
+    },
+    twitter: {
+      card: event.coverUrl ? "summary_large_image" : "summary",
+      title,
+      description,
+    },
+  }
+}
 
 export default async function PublicEventPage({
   params,
@@ -57,8 +88,13 @@ export default async function PublicEventPage({
           )} p-5`}
         >
           {event.coverUrl && (
-            // eslint-disable-next-line @next/next/no-img-element
-            <img src={event.coverUrl} alt="" className="absolute inset-0 size-full object-cover" />
+            <Image
+              src={event.coverUrl}
+              alt=""
+              fill
+              sizes="(max-width: 768px) 100vw, 768px"
+              className="object-cover"
+            />
           )}
         </div>
 

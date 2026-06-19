@@ -124,11 +124,15 @@ export function activityOf(e: EventWithRsvps, limit = 6): ActivityView[] {
 
 /* ---------- queries ---------- */
 
+// safety cap so a runaway account can't load unbounded rows into memory
+const LIST_CAP = 500
+
 export async function getOwnedEvents(ownerId: string) {
   const events = await prisma.event.findMany({
     where: { ownerId },
     include: { rsvps: true },
     orderBy: { startsAt: "asc" },
+    take: LIST_CAP,
   })
   return events.map((e) => ({ dto: toDTO(e), counts: countsOf(e), raw: e }))
 }
@@ -199,6 +203,7 @@ export async function getInvitedEvents(userId: string) {
     where: { rsvps: { some: { userId } } },
     include: { rsvps: true },
     orderBy: { startsAt: "asc" },
+    take: LIST_CAP,
   })
   return events.map((e) => ({
     dto: toDTO(e),
@@ -222,10 +227,15 @@ export async function getEventBySlug(slug: string, userId?: string) {
   }
 }
 
-// any signed-in viewer can read an event by id (true public access is deferred)
+// invite detail view: only the host or a guest who has an RSVP may read it.
+// (anyone with the link RSVPs via the public /e/[slug] page first.)
 export async function getEventForViewer(id: string, userId?: string) {
+  if (!userId) return null
   const e = await prisma.event.findUnique({ where: { id }, include: { rsvps: true } })
   if (!e) return null
+  const isOwner = e.ownerId === userId
+  const hasRsvp = e.rsvps.some((r) => r.userId === userId)
+  if (!isOwner && !hasRsvp) return null // not invited → treated as not found
   return {
     event: e,
     dto: toDTO(e),
@@ -252,6 +262,9 @@ export type CreateEventInput = {
   capacity?: number | null
   requireApproval: boolean
   hideLocation: boolean
+  emailGuestRsvp: boolean
+  emailHostRsvp: boolean
+  emailDecision: boolean
   coverUrl?: string
 }
 
@@ -288,6 +301,9 @@ export async function createEvent(input: CreateEventInput) {
       capacity: input.capacity ?? null,
       requireApproval: input.requireApproval,
       hideLocation: input.hideLocation,
+      emailGuestRsvp: input.emailGuestRsvp,
+      emailHostRsvp: input.emailHostRsvp,
+      emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
       slug,
     },
@@ -320,21 +336,48 @@ export async function deleteEvent(ownerId: string, id: string) {
   return res
 }
 
-// signed-in user RSVPs to an event (going → Pending if approval required)
+// Clerk user.deleted cleanup: remove the user's owned events (cascades RSVPs),
+// their RSVPs on other events, and their cover images. Avoids orphaned ownerIds.
+export async function purgeUser(userId: string) {
+  const owned = await prisma.event.findMany({
+    where: { ownerId: userId },
+    select: { coverUrl: true },
+  })
+  await prisma.event.deleteMany({ where: { ownerId: userId } })
+  await prisma.rsvp.deleteMany({ where: { userId } })
+  await Promise.all(owned.map((e) => deleteCover(e.coverUrl)))
+}
+
+// signed-in user RSVPs to an event.
+// going → Pending if approval required; if the event is at capacity the guest
+// is placed on the Waitlist instead of Going. Re-counted atomically per call.
 export async function upsertSelfRsvp(
   userId: string,
   eventId: string,
   going: boolean,
   guest?: { name?: string; email?: string }
 ) {
-  const ev = await prisma.event.findUnique({ where: { id: eventId } })
+  const ev = await prisma.event.findUnique({
+    where: { id: eventId },
+    include: { rsvps: { select: { userId: true, status: true } } },
+  })
   if (!ev) throw new Error("Event not found")
   if (ev.ownerId === userId) throw new Error("Hosts can't RSVP to their own event")
-  const status: RsvpStatus = going
-    ? ev.requireApproval
+
+  // confirmed guests other than this one (don't count my own existing Going row)
+  const goingOthers = ev.rsvps.filter(
+    (r) => r.status === "Going" && r.userId !== userId
+  ).length
+  const atCapacity = ev.capacity != null && goingOthers >= ev.capacity
+
+  const status: RsvpStatus = !going
+    ? "Declined"
+    : ev.requireApproval
       ? "Pending"
-      : "Going"
-    : "Declined"
+      : atCapacity
+        ? "Waitlist"
+        : "Going"
+
   const rsvp = await prisma.rsvp.upsert({
     where: { eventId_userId: { eventId, userId } },
     create: {

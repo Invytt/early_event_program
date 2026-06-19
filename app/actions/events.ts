@@ -1,11 +1,12 @@
 "use server"
 
 import { revalidatePath } from "next/cache"
+import { after } from "next/server"
 import { auth, currentUser, clerkClient } from "@clerk/nextjs/server"
 import { format } from "date-fns"
 import { z } from "zod"
 
-import { formatTime } from "@/lib/events"
+import { formatTime, type RsvpStatus } from "@/lib/events"
 import {
   rsvpConfirmationEmail,
   approvalDecisionEmail,
@@ -19,6 +20,18 @@ import {
   upsertSelfRsvp,
 } from "@/lib/db"
 import { uploadCover, storageConfigured } from "@/lib/storage"
+import { rateLimit } from "@/lib/ratelimit"
+import { reportError } from "@/lib/observability"
+
+function whenOf(startsAt: Date) {
+  const time = `${String(startsAt.getUTCHours()).padStart(2, "0")}:${String(
+    startsAt.getUTCMinutes()
+  ).padStart(2, "0")}`
+  return `${format(startsAt, "EEE, MMM d")} · ${formatTime(time)}`
+}
+
+// cuid-ish id guard for action params coming from the client
+const idSchema = z.string().trim().min(1).max(64)
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Event name is required").max(120),
@@ -30,7 +43,13 @@ const createSchema = z.object({
   capacity: z.number().int().positive().max(1_000_000).nullable().optional(),
   requireApproval: z.boolean(),
   hideLocation: z.boolean(),
-  startsAt: z.string().datetime(), // ISO
+  emailGuestRsvp: z.boolean(),
+  emailHostRsvp: z.boolean(),
+  emailDecision: z.boolean(),
+  startsAt: z
+    .string()
+    .datetime()
+    .refine((s) => new Date(s).getTime() > Date.now(), "Event must be in the future"), // ISO
   timezone: z.string().optional(),
   coverUrl: z.string().url().optional(),
 })
@@ -64,6 +83,9 @@ export async function createEventAction(
     capacity: d.capacity ?? null,
     requireApproval: d.requireApproval,
     hideLocation: d.hideLocation,
+    emailGuestRsvp: d.emailGuestRsvp,
+    emailHostRsvp: d.emailHostRsvp,
+    emailDecision: d.emailDecision,
     coverUrl: d.coverUrl,
   })
 
@@ -72,32 +94,49 @@ export async function createEventAction(
   return { ok: true, id: event.id, slug: event.slug }
 }
 
-export async function approveRsvpAction(rsvpId: string, eventId: string) {
-  const { userId } = await auth()
-  if (!userId) throw new Error("Not signed in")
-  const r = await setRsvpStatus(userId, rsvpId, "Going")
-  if (r.guestEmail) {
-    await approvalDecisionEmail({
-      to: { email: r.guestEmail, name: r.guestName ?? undefined },
-      eventName: r.event.name,
-      approved: true,
-    })
+export type ActionResult = { ok: true } | { ok: false; error: string }
+
+async function decideRsvp(
+  rsvpId: string,
+  approved: boolean
+): Promise<ActionResult> {
+  if (!idSchema.safeParse(rsvpId).success) {
+    return { ok: false, error: "Invalid request" }
   }
-  revalidatePath(`/dashboard/events/${eventId}`)
+  try {
+    const { userId } = await auth()
+    if (!userId) return { ok: false, error: "Not signed in" }
+    const r = await setRsvpStatus(userId, rsvpId, approved ? "Going" : "Declined")
+    if (r.guestEmail && r.event.emailDecision) {
+      const email = r.guestEmail
+      after(() =>
+        approvalDecisionEmail({
+          to: { email, name: r.guestName ?? undefined },
+          guestName: r.guestName ?? undefined,
+          eventId: r.event.id,
+          eventName: r.event.name,
+          whenLabel: whenOf(r.event.startsAt),
+          approved,
+        })
+      )
+    }
+    // refresh host queue, guest's invite view, and the public page (going count)
+    revalidatePath(`/dashboard/events/${r.event.id}`)
+    revalidatePath(`/dashboard/invites/${r.event.id}`)
+    revalidatePath(`/e/${r.event.slug}`)
+    return { ok: true }
+  } catch (e) {
+    reportError("decideRsvp", e)
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" }
+  }
 }
 
-export async function rejectRsvpAction(rsvpId: string, eventId: string) {
-  const { userId } = await auth()
-  if (!userId) throw new Error("Not signed in")
-  const r = await setRsvpStatus(userId, rsvpId, "Declined")
-  if (r.guestEmail) {
-    await approvalDecisionEmail({
-      to: { email: r.guestEmail, name: r.guestName ?? undefined },
-      eventName: r.event.name,
-      approved: false,
-    })
-  }
-  revalidatePath(`/dashboard/events/${eventId}`)
+export async function approveRsvpAction(rsvpId: string, _eventId?: string) {
+  return decideRsvp(rsvpId, true)
+}
+
+export async function rejectRsvpAction(rsvpId: string, _eventId?: string) {
+  return decideRsvp(rsvpId, false)
 }
 
 export type UploadCoverResult =
@@ -127,9 +166,34 @@ export async function uploadCoverAction(
   }
 }
 
-export async function rsvpAction(eventId: string, going: boolean) {
+export async function rsvpAction(
+  eventId: string,
+  going: boolean
+): Promise<
+  { ok: true; status: RsvpStatus } | { ok: false; error: string }
+> {
+  if (!idSchema.safeParse(eventId).success) {
+    return { ok: false, error: "Invalid event" }
+  }
+  try {
+    return await doRsvp(eventId, going)
+  } catch (e) {
+    reportError("rsvpAction", e)
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" }
+  }
+}
+
+async function doRsvp(
+  eventId: string,
+  going: boolean
+): Promise<
+  { ok: true; status: RsvpStatus } | { ok: false; error: string }
+> {
   const user = await currentUser()
-  if (!user) throw new Error("Not signed in")
+  if (!user) return { ok: false, error: "Not signed in" }
+  if (!rateLimit(`rsvp:${user.id}`, 20, 60_000)) {
+    return { ok: false, error: "Too many changes — slow down for a moment." }
+  }
   const email =
     user.primaryEmailAddress?.emailAddress ??
     user.emailAddresses[0]?.emailAddress ??
@@ -145,45 +209,62 @@ export async function rsvpAction(eventId: string, going: boolean) {
   })
 
   if (going) {
-    const whenLabel = `${format(event.startsAt, "EEE, MMM d")} · ${formatTime(
-      `${String(event.startsAt.getUTCHours()).padStart(2, "0")}:${String(
-        event.startsAt.getUTCMinutes()
-      ).padStart(2, "0")}`
-    )}`
-    if (email) {
-      await rsvpConfirmationEmail({
-        to: { email, name },
-        eventId,
-        eventName: event.name,
-        whenLabel,
-        pending: status === "Pending",
-      })
-    }
-    // notify host
-    try {
-      const host = await (await clerkClient()).users.getUser(event.ownerId)
-      const hostEmail = host.primaryEmailAddress?.emailAddress
-      if (hostEmail) {
-        await hostNewRsvpEmail({
-          to: { email: hostEmail },
+    const whenLabel = whenOf(event.startsAt)
+    const pending = status === "Pending"
+    // send emails after the response is returned (non-blocking)
+    after(async () => {
+      if (email && event.emailGuestRsvp) {
+        await rsvpConfirmationEmail({
+          to: { email, name },
+          eventId,
           eventName: event.name,
-          guestName: name,
-          pending: status === "Pending",
+          whenLabel,
+          pending,
         })
       }
-    } catch {
-      /* host lookup failed — non-fatal */
-    }
+      // notify host
+      try {
+        if (!event.emailHostRsvp) return
+        const host = await (await clerkClient()).users.getUser(event.ownerId)
+        const hostEmail = host.primaryEmailAddress?.emailAddress
+        if (hostEmail) {
+          const hostName =
+            [host.firstName, host.lastName].filter(Boolean).join(" ") ||
+            host.username ||
+            undefined
+          await hostNewRsvpEmail({
+            to: { email: hostEmail, name: hostName },
+            hostName,
+            eventId,
+            eventName: event.name,
+            guestName: name,
+            whenLabel,
+            pending,
+          })
+        }
+      } catch {
+        /* host lookup failed — non-fatal */
+      }
+    })
   }
 
   revalidatePath(`/dashboard/invites/${eventId}`)
   revalidatePath("/dashboard/invites")
+  revalidatePath(`/e/${event.slug}`)
+  return { ok: true, status }
 }
 
-export async function deleteEventAction(id: string) {
-  const { userId } = await auth()
-  if (!userId) throw new Error("Not signed in")
-  await deleteEvent(userId, id)
-  revalidatePath("/dashboard")
-  revalidatePath("/dashboard/my-invitations")
+export async function deleteEventAction(id: string): Promise<ActionResult> {
+  if (!idSchema.safeParse(id).success) return { ok: false, error: "Invalid event" }
+  try {
+    const { userId } = await auth()
+    if (!userId) return { ok: false, error: "Not signed in" }
+    await deleteEvent(userId, id)
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/my-invitations")
+    return { ok: true }
+  } catch (e) {
+    reportError("deleteEventAction", e)
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" }
+  }
 }

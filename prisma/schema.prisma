@@ -28,6 +28,10 @@ model Event {
   capacity        Int?
   requireApproval Boolean  @default(false)
   hideLocation    Boolean  @default(false)
+  // transactional email toggles (host-controlled per event)
+  emailGuestRsvp  Boolean  @default(true) // confirmation email to guest on RSVP
+  emailHostRsvp   Boolean  @default(true) // notification email to host on new RSVP
+  emailDecision   Boolean  @default(true) // approve/decline email to guest
   slug            String   @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
@@ -51,4 +55,5 @@ model Rsvp {
 
   @@unique([eventId, userId])
   @@index([eventId])
+  @@index([userId])
 }

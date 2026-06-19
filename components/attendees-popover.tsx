@@ -19,7 +19,10 @@ export function AttendeesPopover({ names }: { names: string[] }) {
   const count = names.length
   return (
     <Popover>
-      <PopoverTrigger className="group flex w-full items-center gap-3 rounded-lg border border-border bg-[var(--paper-2)] px-4 py-3 text-left text-sm transition-colors hover:bg-black/[0.03]">
+      <PopoverTrigger
+        aria-label={`View ${count} going`}
+        className="group flex w-full items-center gap-3 rounded-lg border border-border bg-[var(--paper-2)] px-4 py-3 text-left text-sm transition-colors hover:bg-black/[0.03]"
+      >
         <UsersIcon className="size-4 text-muted-foreground" />
         <span>{count} going</span>
         <ChevronDownIcon className="ml-auto size-4 text-muted-foreground transition-transform group-data-[state=open]:rotate-180" />

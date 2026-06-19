@@ -3,6 +3,8 @@
 import Anthropic from "@anthropic-ai/sdk"
 import { auth } from "@clerk/nextjs/server"
 
+import { rateLimit } from "@/lib/ratelimit"
+
 export type GenerateDescResult =
   | { ok: true; text: string }
   | { ok: false; error: string }
@@ -14,6 +16,10 @@ export async function generateEventDescription(input: {
 }): Promise<GenerateDescResult> {
   const { userId } = await auth()
   if (!userId) return { ok: false, error: "Not signed in" }
+  // cap paid Claude calls per user (cost guard)
+  if (!rateLimit(`ai:${userId}`, 10, 60_000)) {
+    return { ok: false, error: "Too many AI requests — try again in a minute." }
+  }
   if (!process.env.ANTHROPIC_API_KEY) {
     return { ok: false, error: "AI is not configured." }
   }

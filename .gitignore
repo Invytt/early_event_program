@@ -32,6 +32,9 @@ yarn-error.log*
 # env files (keep .env.example committed)
 .env
 .env.*
+.env.local
+.env.production
+.env.production.local
 !.env.example
 
 # typescript

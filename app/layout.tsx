@@ -25,8 +25,12 @@ const mono = Space_Mono({
 });
 
 export const metadata: Metadata = {
-  title: "Eric Cole — Software Engineer",
-  description: "Software engineer focused on building calm, usable products.",
+  title: {
+    default: "Invytt — Early Event Program",
+    template: "%s · Invytt",
+  },
+  description: "Create event invites, collect RSVPs, and manage your guest list.",
+  metadataBase: new URL(process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000"),
 };
 
 export default function RootLayout({

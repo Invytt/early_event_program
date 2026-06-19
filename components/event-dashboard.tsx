@@ -1,6 +1,7 @@
 "use client"
 
 import * as React from "react"
+import Image from "next/image"
 import Link from "next/link"
 import { useRouter } from "next/navigation"
 import {
@@ -89,7 +90,10 @@ export function EventDashboard({
   function runDelete() {
     setDeleting(true)
     deleteEventAction(event.id)
-      .then(() => router.push("/dashboard/my-invitations"))
+      .then((res) => {
+        if (res.ok) router.push("/dashboard/my-invitations")
+        else setDeleting(false)
+      })
       .catch(() => setDeleting(false))
   }
 
@@ -101,10 +105,13 @@ export function EventDashboard({
   function decide(id: string, status: RsvpStatus) {
     setGuests((gs) => gs.map((g) => (g.id === id ? { ...g, status } : g)))
     const run = status === "Going" ? approveRsvpAction : rejectRsvpAction
-    run(id, event.id).catch(() => {
-      // revert on failure
+    const revert = () =>
       setGuests((gs) => gs.map((g) => (g.id === id ? { ...g, status: "Pending" } : g)))
-    })
+    run(id, event.id)
+      .then((res) => {
+        if (!res.ok) revert()
+      })
+      .catch(revert)
   }
 
   const queue = guests.filter((g) => g.status === "Pending")
@@ -125,12 +132,16 @@ export function EventDashboard({
         className={`relative flex min-h-40 flex-col justify-end gap-3 overflow-hidden rounded-xl bg-gradient-to-br ${event.cover} p-5 text-white`}
       >
         {event.coverUrl && (
-          <>
-            {/* eslint-disable-next-line @next/next/no-img-element */}
-            <img src={event.coverUrl} alt="" className="absolute inset-0 size-full object-cover" />
-            <div className="absolute inset-0 bg-black/40" />
-          </>
+          <Image
+            src={event.coverUrl}
+            alt=""
+            fill
+            sizes="(max-width: 1024px) 100vw, 1024px"
+            className="object-cover"
+          />
         )}
+        {/* bottom scrim for legible text over any cover */}
+        <div className="absolute inset-0 bg-gradient-to-t from-black/75 via-black/35 to-black/10" />
         <div className="relative flex flex-wrap items-end justify-between gap-3">
           <div>
             <span className="rounded-full bg-black/25 px-2.5 py-0.5 text-xs font-medium backdrop-blur-sm">
@@ -184,10 +195,10 @@ export function EventDashboard({
             </AlertDialog>
           </div>
         </div>
-        <div className="relative flex flex-wrap gap-x-5 gap-y-1 text-sm text-white/90">
-          <span className="flex items-center gap-1.5"><CalendarIcon className="size-4" />{dateLabel}</span>
-          <span className="flex items-center gap-1.5"><ClockIcon className="size-4" />{timeLabel}</span>
-          <span className="flex items-center gap-1.5"><MapPinIcon className="size-4" />{event.location}</span>
+        <div className="relative flex flex-wrap gap-x-5 gap-y-1 text-sm text-white">
+          <span className="flex items-center gap-1.5"><CalendarIcon className="size-4 shrink-0" />{dateLabel}</span>
+          <span className="flex items-center gap-1.5"><ClockIcon className="size-4 shrink-0" />{timeLabel}</span>
+          <span className="flex w-full items-start gap-1.5 sm:w-auto"><MapPinIcon className="mt-0.5 size-4 shrink-0" /><span className="min-w-0 break-words">{event.location}</span></span>
         </div>
       </div>
 

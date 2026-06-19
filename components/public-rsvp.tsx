@@ -24,12 +24,15 @@ export function PublicRsvp({
   requireApproval: boolean
 }) {
   const [status, setStatus] = React.useState<RsvpStatus | null>(initialStatus)
+  const [error, setError] = React.useState<string | null>(null)
   const [pending, startTransition] = React.useTransition()
 
   function respond(going: boolean) {
+    setError(null)
     startTransition(async () => {
-      await rsvpAction(eventId, going)
-      setStatus(going ? (requireApproval ? "Pending" : "Going") : "Declined")
+      const res = await rsvpAction(eventId, going)
+      if (res.ok) setStatus(res.status)
+      else setError(res.error)
     })
   }
 
@@ -91,6 +94,21 @@ export function PublicRsvp({
       </div>
     )
   }
+  if (status === "Waitlist") {
+    return (
+      <div className="border-t border-border pt-6">
+        <div className="flex items-center gap-3 rounded-xl border border-blue-600/30 bg-blue-500/10 p-4 text-blue-800">
+          <ClockIcon className="size-5 shrink-0" />
+          <div>
+            <p className="font-medium">You&apos;re on the waitlist</p>
+            <p className="text-sm text-blue-800/80">
+              This event is at capacity — we&apos;ll move you in if a spot opens up.
+            </p>
+          </div>
+        </div>
+      </div>
+    )
+  }
   if (status === "Declined") {
     return (
       <div className="border-t border-border pt-6">
@@ -126,6 +144,7 @@ export function PublicRsvp({
           This event requires host approval — you&apos;ll be confirmed once approved.
         </p>
       )}
+      {error && <p className="text-sm text-destructive">{error}</p>}
     </div>
   )
 }

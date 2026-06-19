@@ -12,6 +12,11 @@
   margin-bottom: 0 !important;
 }
 
+/* UserButton: avatar first, then name */
+.cl-userButtonBox {
+  flex-direction: row-reverse !important;
+}
+
 :root {
   --paper: #ecebe6;
   --paper-2: #e6e4dd;
