@@ -145,56 +145,44 @@ export async function getOwnedEvent(ownerId: string, id: string) {
   return e
 }
 
-export async function newRsvpsThisWeek(ownerId: string): Promise<number> {
-  const since = new Date(Date.now() - 7 * 86400000)
-  return prisma.rsvp.count({
-    where: { event: { ownerId }, createdAt: { gte: since } },
-  })
-}
+/* ---------- in-memory analytics derived from already-loaded events ----------
+   The dashboard loads every owned event (with rsvps) once via getOwnedEvents;
+   these compute the series / activity / weekly-count from that same data so we
+   don't fire extra round-trips for things we already have in memory. */
 
-export async function ownerSeries(ownerId: string): Promise<SeriesPoint[]> {
-  const [rsvps, firstEvent, lastEvent] = await Promise.all([
-    prisma.rsvp.findMany({
-      where: { event: { ownerId } },
-      select: { createdAt: true },
-    }),
-    prisma.event.findFirst({
-      where: { ownerId },
-      orderBy: { createdAt: "asc" },
-      select: { createdAt: true },
-    }),
-    prisma.event.findFirst({
-      where: { ownerId },
-      orderBy: { startsAt: "desc" },
-      select: { startsAt: true },
-    }),
-  ])
+export function ownerSeriesFrom(events: EventWithRsvps[]): SeriesPoint[] {
   const now = new Date()
-  return buildDailySeries(
-    rsvps.map((r) => r.createdAt),
-    firstEvent?.createdAt ?? now,
-    lastEvent?.startsAt ?? now
-  )
+  if (events.length === 0) return buildDailySeries([], now, now)
+  const rsvpDates = events.flatMap((e) => e.rsvps.map((r) => r.createdAt))
+  const first = new Date(Math.min(...events.map((e) => e.createdAt.getTime())))
+  const last = new Date(Math.max(...events.map((e) => e.startsAt.getTime())))
+  return buildDailySeries(rsvpDates, first, last)
 }
 
-export async function recentActivity(
-  ownerId: string,
+export function recentActivityFrom(
+  events: EventWithRsvps[],
   limit = 8
-): Promise<ActivityView[]> {
-  const rsvps = await prisma.rsvp.findMany({
-    where: { event: { ownerId } },
-    include: { event: true },
-    orderBy: { createdAt: "desc" },
-    take: limit,
-  })
-  return rsvps.map((r) => ({
-    id: r.id,
-    guest: r.guestName ?? (r.userId ? `Member ${r.userId.slice(-4)}` : "Guest"),
-    action:
-      r.status === "Going" ? "going" : r.status === "Pending" ? "pending" : "declined",
-    when: rel(r.createdAt),
-    event: r.event.name,
-  }))
+): ActivityView[] {
+  return events
+    .flatMap((e) => e.rsvps.map((r) => ({ r, eventName: e.name })))
+    .sort((a, b) => b.r.createdAt.getTime() - a.r.createdAt.getTime())
+    .slice(0, limit)
+    .map(({ r, eventName }) => ({
+      id: r.id,
+      guest: r.guestName ?? (r.userId ? `Member ${r.userId.slice(-4)}` : "Guest"),
+      action:
+        r.status === "Going" ? "going" : r.status === "Pending" ? "pending" : "declined",
+      when: rel(r.createdAt),
+      event: eventName,
+    }))
+}
+
+export function newRsvpsThisWeekFrom(events: EventWithRsvps[]): number {
+  const since = Date.now() - 7 * 86400000
+  return events.reduce(
+    (n, e) => n + e.rsvps.filter((r) => r.createdAt.getTime() >= since).length,
+    0
+  )
 }
 
 // events the signed-in user has responded to (guest perspective)
@@ -306,6 +294,41 @@ export async function createEvent(input: CreateEventInput) {
       emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
       slug,
+    },
+  })
+}
+
+export type UpdateEventInput = Omit<CreateEventInput, "ownerId">
+
+// Owner-guarded full update. Slug is intentionally left unchanged so already
+// shared invite links keep working after an edit.
+export async function updateEvent(
+  ownerId: string,
+  id: string,
+  input: UpdateEventInput
+) {
+  const e = await prisma.event.findFirst({ where: { id, ownerId } })
+  if (!e) throw new Error("Not found")
+  // if the cover was replaced or removed, clean up the old image (best-effort)
+  if (e.coverUrl && e.coverUrl !== input.coverUrl) await deleteCover(e.coverUrl)
+  return prisma.event.update({
+    where: { id },
+    data: {
+      name: input.name,
+      description: input.description || null,
+      locationText: input.locationText || null,
+      placeId: input.placeId || null,
+      lat: input.lat ?? null,
+      lng: input.lng ?? null,
+      startsAt: input.startsAt,
+      timezone: input.timezone || null,
+      capacity: input.capacity ?? null,
+      requireApproval: input.requireApproval,
+      hideLocation: input.hideLocation,
+      emailGuestRsvp: input.emailGuestRsvp,
+      emailHostRsvp: input.emailHostRsvp,
+      emailDecision: input.emailDecision,
+      coverUrl: input.coverUrl || null,
     },
   })
 }

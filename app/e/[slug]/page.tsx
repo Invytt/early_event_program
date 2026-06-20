@@ -76,8 +76,7 @@ export default async function PublicEventPage({
       <div className="mx-auto flex w-full max-w-2xl flex-col gap-6 px-5">
         {/* Brand */}
         <div className="logo">
-          Invytt
-          <br />
+          <Image src="/logo.png" alt="Invytt" width={401} height={170} className="logo-img" priority />
           <span className="scriptle">Early Event Program</span>
         </div>
 

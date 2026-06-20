@@ -15,9 +15,9 @@ import { Donut, Bars } from "@/components/charts"
 import { RsvpChart } from "@/components/rsvp-chart"
 import {
   getOwnedEvents,
-  ownerSeries,
-  recentActivity,
-  newRsvpsThisWeek,
+  ownerSeriesFrom,
+  recentActivityFrom,
+  newRsvpsThisWeekFrom,
 } from "@/lib/db"
 import { daysUntil, formatTime } from "@/lib/events"
 
@@ -62,13 +62,11 @@ export default async function DashboardPage() {
     })
     .filter((x) => x.reasons.length > 0)
 
-  const [series, activity, newThisWeek] = userId
-    ? await Promise.all([
-        ownerSeries(userId),
-        recentActivity(userId, 8),
-        newRsvpsThisWeek(userId),
-      ])
-    : [[], [], 0]
+  // derived from the events already loaded above — no extra DB round-trips
+  const rawEvents = owned.map((x) => x.raw)
+  const series = ownerSeriesFrom(rawEvents)
+  const activity = recentActivityFrom(rawEvents, 8)
+  const newThisWeek = newRsvpsThisWeekFrom(rawEvents)
 
   const todays = upcoming.filter((x) => x.days === 0)
 

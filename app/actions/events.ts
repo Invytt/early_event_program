@@ -15,6 +15,7 @@ import {
 
 import {
   createEvent,
+  updateEvent,
   setRsvpStatus,
   deleteEvent,
   upsertSelfRsvp,
@@ -92,6 +93,54 @@ export async function createEventAction(
   revalidatePath("/dashboard")
   revalidatePath("/dashboard/my-invitations")
   return { ok: true, id: event.id, slug: event.slug }
+}
+
+// Edit reuses the create fields but drops the "must be in the future" rule
+// (hosts may tweak details of an event that is already imminent) and adds the id.
+const updateSchema = createSchema
+  .extend({
+    id: idSchema,
+    startsAt: z.string().datetime(),
+  })
+
+export async function updateEventAction(
+  input: z.input<typeof updateSchema>
+): Promise<CreateEventResult> {
+  const { userId } = await auth()
+  if (!userId) return { ok: false, error: "Not signed in" }
+
+  const parsed = updateSchema.safeParse(input)
+  if (!parsed.success) {
+    return { ok: false, error: parsed.error.issues[0]?.message ?? "Invalid input" }
+  }
+  const d = parsed.data
+
+  try {
+    const event = await updateEvent(userId, d.id, {
+      name: d.name,
+      description: d.description || undefined,
+      locationText: d.location || undefined,
+      placeId: d.placeId,
+      lat: d.lat,
+      lng: d.lng,
+      startsAt: new Date(d.startsAt),
+      timezone: d.timezone,
+      capacity: d.capacity ?? null,
+      requireApproval: d.requireApproval,
+      hideLocation: d.hideLocation,
+      emailGuestRsvp: d.emailGuestRsvp,
+      emailHostRsvp: d.emailHostRsvp,
+      emailDecision: d.emailDecision,
+      coverUrl: d.coverUrl,
+    })
+    revalidatePath("/dashboard")
+    revalidatePath("/dashboard/my-invitations")
+    revalidatePath(`/dashboard/events/${event.id}`)
+    revalidatePath(`/e/${event.slug}`)
+    return { ok: true, id: event.id, slug: event.slug }
+  } catch {
+    return { ok: false, error: "Could not update event" }
+  }
 }
 
 export type ActionResult = { ok: true } | { ok: false; error: string }

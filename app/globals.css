@@ -111,6 +111,26 @@ body {
   line-height: 0.92;
   text-transform: uppercase;
 }
+/* brand logo image replacing the wordmark */
+.logo-img {
+  height: 30px;
+  width: auto;
+  display: block;
+}
+/* wordmark in the landing navbar */
+.nav .logo-img {
+  height: 44px;
+}
+/* wordmark in the dashboard sidebar */
+aside .logo-img {
+  height: 40px;
+}
+.title-img {
+  height: clamp(64px, 13vw, 150px);
+  width: auto;
+  display: block;
+  margin: 0 auto -0.22em;
+}
 .logo .scriptle {
   font-family: var(--font-script), cursive;
   text-transform: lowercase;

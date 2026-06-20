@@ -129,8 +129,8 @@ export function DashboardSidebar() {
         >
           <div className="flex items-center justify-between gap-2">
             <div className="logo px-2 py-1.5">
-              Invytt
-              <br />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="Invytt" className="logo-img" />
               <span className="scriptle">Early Event Program</span>
             </div>
             <button
@@ -164,8 +164,8 @@ export function DashboardSidebar() {
         <div className="flex items-center justify-between gap-2">
           {open && (
             <div className="logo px-2 py-1.5">
-              Invytt
-              <br />
+              {/* eslint-disable-next-line @next/next/no-img-element */}
+              <img src="/logo.png" alt="Invytt" className="logo-img" />
               <span className="scriptle">Early Event Program</span>
             </div>
           )}

@@ -5,6 +5,9 @@ const nextConfig: NextConfig = {
     root: __dirname,
   },
   images: {
+    // smaller payloads for cover images; cache optimized variants for a day
+    formats: ["image/avif", "image/webp"],
+    minimumCacheTTL: 86400,
     // Supabase Storage public URLs for event covers
     remotePatterns: [
       {

@@ -13,6 +13,7 @@ import {
   XIcon,
   Share2Icon,
   Trash2Icon,
+  PencilIcon,
 } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
@@ -165,6 +166,12 @@ export function EventDashboard({
             >
               <Share2Icon className="size-4" />
               {copied ? "Copied!" : "Share"}
+            </Button>
+            <Button asChild size="sm" variant="secondary" className="gap-1.5">
+              <Link href={`/dashboard/events/${event.id}/edit`}>
+                <PencilIcon className="size-4" />
+                Edit
+              </Link>
             </Button>
             <AlertDialog>
               <AlertDialogTrigger asChild>

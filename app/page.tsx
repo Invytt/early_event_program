@@ -6,9 +6,8 @@ export default function Home() {
     <main className="page">
       <nav className="nav">
         <div className="logo">
-          Invytt
-          <br />
-          <span className="scriptle">Early Events</span>
+          {/* eslint-disable-next-line @next/next/no-img-element */}
+          <img src="/logo.png" alt="Invytt" className="logo-img" />
         </div>
         <div className="nav-right">
           <Show when="signed-in">
@@ -33,8 +32,6 @@ export default function Home() {
 
       <section className="hero">
         <h1 className="title">
-          Invytt
-          <br />
           <span className="scriptle">Early Events</span>
         </h1>
 

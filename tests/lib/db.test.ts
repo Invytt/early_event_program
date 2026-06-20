@@ -32,8 +32,8 @@ import {
   activityOf,
   getOwnedEvents,
   getOwnedEvent,
-  ownerSeries,
-  recentActivity,
+  ownerSeriesFrom,
+  recentActivityFrom,
   getInvitedEvents,
   getEventBySlug,
   getEventForViewer,
@@ -41,7 +41,7 @@ import {
   setRsvpStatus,
   deleteEvent,
   upsertSelfRsvp,
-  newRsvpsThisWeek,
+  newRsvpsThisWeekFrom,
 } from "@/lib/db"
 
 beforeEach(() => {
@@ -195,39 +195,54 @@ describe("getOwnedEvent", () => {
   })
 })
 
-describe("ownerSeries", () => {
-  it("builds a daily series spanning first event to last event day", async () => {
-    prismaMock.rsvp.findMany.mockResolvedValue([
-      { createdAt: new Date("2026-06-02T10:00:00.000Z") },
-    ])
-    prismaMock.event.findFirst
-      .mockResolvedValueOnce({ createdAt: new Date("2026-06-01T00:00:00.000Z") }) // first
-      .mockResolvedValueOnce({ startsAt: new Date("2026-06-05T00:00:00.000Z") }) // last
-    const s = await ownerSeries("owner_1")
+describe("ownerSeriesFrom", () => {
+  it("builds a daily series spanning first event to last event day", () => {
+    const events = [
+      makeEvent({
+        createdAt: new Date("2026-06-01T00:00:00.000Z"),
+        startsAt: new Date("2026-06-05T00:00:00.000Z"),
+        rsvps: [makeRsvp({ createdAt: new Date("2026-06-02T10:00:00.000Z") })],
+      }),
+    ]
+    const s = ownerSeriesFrom(events)
     expect(s.length).toBeGreaterThanOrEqual(2)
-    expect(s.reduce((n, p) => n + p.value, 0)).toBe(1)
+    expect(s.reduce((n: number, p: { value: number }) => n + p.value, 0)).toBe(1)
   })
 
-  it("falls back to now when the owner has no events", async () => {
-    prismaMock.rsvp.findMany.mockResolvedValue([])
-    prismaMock.event.findFirst.mockResolvedValue(null)
-    const s = await ownerSeries("owner_1")
+  it("falls back to now when the owner has no events", () => {
+    const s = ownerSeriesFrom([])
     expect(s.length).toBeGreaterThanOrEqual(2)
   })
 })
 
-describe("recentActivity", () => {
-  it("maps recent rsvps to activity rows with the event name", async () => {
-    prismaMock.rsvp.findMany.mockResolvedValue([
-      makeRsvp({ status: "Going", guestName: "Ann", event: makeEvent({ name: "Gala" }) }),
-      makeRsvp({ status: "Pending", userId: "user_zzzz9999", guestName: null, event: makeEvent({ name: "Mixer" }) }),
-    ])
-    const a = await recentActivity("owner_1", 5)
+describe("recentActivityFrom", () => {
+  it("maps recent rsvps to activity rows with the event name", () => {
+    const events = [
+      makeEvent({
+        name: "Gala",
+        rsvps: [
+          makeRsvp({
+            status: "Going",
+            guestName: "Ann",
+            createdAt: new Date("2026-06-03T00:00:00.000Z"),
+          }),
+        ],
+      }),
+      makeEvent({
+        name: "Mixer",
+        rsvps: [
+          makeRsvp({
+            status: "Pending",
+            userId: "user_zzzz9999",
+            guestName: null,
+            createdAt: new Date("2026-06-02T00:00:00.000Z"),
+          }),
+        ],
+      }),
+    ]
+    const a = recentActivityFrom(events, 5)
     expect(a[0]).toMatchObject({ guest: "Ann", action: "going", event: "Gala" })
     expect(a[1]).toMatchObject({ guest: "Member 9999", action: "pending", event: "Mixer" })
-    expect(prismaMock.rsvp.findMany).toHaveBeenCalledWith(
-      expect.objectContaining({ take: 5, where: { event: { ownerId: "owner_1" } } })
-    )
   })
 })
 
@@ -308,14 +323,21 @@ describe("getEventForViewer", () => {
   })
 })
 
-describe("newRsvpsThisWeek", () => {
-  it("counts rsvps created in the trailing 7 days for the owner", async () => {
-    prismaMock.rsvp.count.mockResolvedValue(3)
-    const n = await newRsvpsThisWeek("owner_1")
-    expect(n).toBe(3)
-    const arg = prismaMock.rsvp.count.mock.calls[0][0]
-    expect(arg.where.event).toEqual({ ownerId: "owner_1" })
-    expect(arg.where.createdAt.gte).toBeInstanceOf(Date)
+describe("newRsvpsThisWeekFrom", () => {
+  it("counts rsvps created in the trailing 7 days across the owner's events", () => {
+    const recent = new Date(Date.now() - 2 * 86400000)
+    const old = new Date(Date.now() - 30 * 86400000)
+    const events = [
+      makeEvent({
+        rsvps: [
+          makeRsvp({ createdAt: recent }),
+          makeRsvp({ createdAt: recent }),
+          makeRsvp({ createdAt: old }),
+        ],
+      }),
+      makeEvent({ rsvps: [makeRsvp({ createdAt: recent })] }),
+    ]
+    expect(newRsvpsThisWeekFrom(events)).toBe(3)
   })
 })
 
