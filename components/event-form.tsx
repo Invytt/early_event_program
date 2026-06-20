@@ -68,15 +68,23 @@ export type EventFormInitial = {
   coverUrl?: string | null
 }
 
+// the calendar day the event is on, read in UTC (times are stored as UTC wall-clock)
+function dateFromIso(iso?: string) {
+  if (!iso) return undefined
+  const d = new Date(iso)
+  return new Date(d.getUTCFullYear(), d.getUTCMonth(), d.getUTCDate())
+}
+
 function timeParts(iso?: string) {
   if (!iso) return { hour: "", minute: "", period: "" }
   const d = new Date(iso)
-  const h24 = d.getHours()
+  // times are stored as wall-clock in UTC, so read them back in UTC
+  const h24 = d.getUTCHours()
   const period = h24 >= 12 ? "PM" : "AM"
   const h12 = h24 % 12 === 0 ? 12 : h24 % 12
   return {
     hour: String(h12).padStart(2, "0"),
-    minute: String(d.getMinutes()).padStart(2, "0"),
+    minute: String(d.getUTCMinutes()).padStart(2, "0"),
     period,
   }
 }
@@ -103,7 +111,7 @@ export function EventForm({
   })
   const [capacity, setCapacity] = React.useState(initial?.capacity ?? "")
   const [date, setDate] = React.useState<Date | undefined>(
-    initial?.startsAt ? new Date(initial.startsAt) : undefined
+    dateFromIso(initial?.startsAt)
   )
   const [hour, setHour] = React.useState(init0.hour)
   const [minute, setMinute] = React.useState(init0.minute)
@@ -167,7 +175,7 @@ export function EventForm({
     minute !== init0.minute ||
     period !== init0.period ||
     (date ? date.toDateString() : "") !==
-      (initial.startsAt ? new Date(initial.startsAt).toDateString() : "") ||
+      (dateFromIso(initial.startsAt)?.toDateString() ?? "") ||
     requireApproval !== initial.requireApproval ||
     hideLocation !== initial.hideLocation ||
     emailGuestRsvp !== initial.emailGuestRsvp ||
@@ -177,18 +185,26 @@ export function EventForm({
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
     setError(null)
-    if (!date) {
-      setError("Pick a date for the event.")
-      return
-    }
+
+    // all fields are required
+    const hasCover = Boolean(fileRef.current?.files?.[0]) || Boolean(initial?.coverUrl)
+    if (!hasCover) return setError("Add a cover image.")
+    if (!name.trim()) return setError("Event name is required.")
+    if (!description.trim()) return setError("Add a description.")
+    if (!location.trim()) return setError("Add a location.")
+    if (!capacity || Number(capacity) < 1) return setError("Add a capacity.")
+    if (!date) return setError("Pick a date for the event.")
+    if (!hour || !minute || !period) return setError("Pick a time for the event.")
+
     const t = time24()
-    const dt = new Date(date)
-    if (t) {
-      const [h, m] = t.split(":").map(Number)
-      dt.setHours(h, m, 0, 0)
-    } else {
-      dt.setHours(0, 0, 0, 0)
-    }
+    // store the picked calendar day + wall-clock time as UTC, so it reads back
+    // identically everywhere (display uses UTC) regardless of viewer timezone
+    let h = 0
+    let m = 0
+    if (t) [h, m] = t.split(":").map(Number)
+    const dt = new Date(
+      Date.UTC(date.getFullYear(), date.getMonth(), date.getDate(), h, m, 0, 0)
+    )
 
     setSubmitting(true)
 
@@ -207,6 +223,12 @@ export function EventForm({
       coverUrl = up.url
     }
 
+    if (!coverUrl) {
+      setError("Add a cover image.")
+      setSubmitting(false)
+      return
+    }
+
     const payload = {
       name,
       description,
@@ -214,7 +236,7 @@ export function EventForm({
       placeId: place.placeId,
       lat: place.lat,
       lng: place.lng,
-      capacity: capacity ? Number(capacity) : null,
+      capacity: Number(capacity),
       requireApproval,
       hideLocation,
       emailGuestRsvp,
@@ -339,6 +361,7 @@ export function EventForm({
                   onChange={(e) => setDescription(e.target.value)}
                   rows={4}
                   placeholder="Tell guests what this event is about…"
+                  required
                 />
               </div>
 
@@ -367,6 +390,7 @@ export function EventForm({
                   value={capacity}
                   onChange={(e) => setCapacity(e.target.value)}
                   placeholder="Max number of guests"
+                  required
                 />
               </div>
 

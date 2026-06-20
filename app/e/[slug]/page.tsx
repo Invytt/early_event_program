@@ -28,6 +28,8 @@ export async function generateMetadata({
   const title = event.name
   // keep it generic — never leak a hidden location in shared previews
   const description = `You're invited — ${format(event.startsAt, "EEEE, MMMM d, yyyy")}.`
+  // use the event cover when set, else fall back to the site banner
+  const image = event.coverUrl || "/og-image.png"
   return {
     title,
     description,
@@ -35,12 +37,13 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      images: event.coverUrl ? [{ url: event.coverUrl }] : undefined,
+      images: [{ url: image }],
     },
     twitter: {
-      card: event.coverUrl ? "summary_large_image" : "summary",
+      card: "summary_large_image",
       title,
       description,
+      images: [image],
     },
   }
 }

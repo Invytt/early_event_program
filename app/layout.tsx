@@ -27,7 +27,7 @@ const mono = Space_Mono({
 });
 
 const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://events.invytt.com";
-const OG_IMAGE = "/logo-black.png";
+const OG_IMAGE = "/og-image.png";
 const LOGO = "/logo-black.png";
 
 const TITLE = "Invytt — Early Event Program";
@@ -71,14 +71,14 @@ export const metadata: Metadata = {
     images: [
       {
         url: OG_IMAGE,
-        width: 500,
-        height: 500,
+        width: 1200,
+        height: 630,
         alt: "Invytt — Early Event Program",
       },
     ],
   },
   twitter: {
-    card: "summary",
+    card: "summary_large_image",
     title: TITLE,
     description:
       "Host events early with us, get exclusive host features, and help build the future of event hosting.",

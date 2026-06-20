@@ -48,6 +48,10 @@ import {
 
 const validInput = {
   name: "Launch Party",
+  description: "An evening to celebrate.",
+  location: "Bangalore",
+  capacity: 50,
+  coverUrl: "https://x/covers/c.png",
   startsAt: "2026-07-01T18:30:00.000Z",
   requireApproval: false,
   hideLocation: false,

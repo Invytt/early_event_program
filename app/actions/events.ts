@@ -36,12 +36,12 @@ const idSchema = z.string().trim().min(1).max(64)
 
 const createSchema = z.object({
   name: z.string().trim().min(1, "Event name is required").max(120),
-  description: z.string().trim().max(2000).optional().or(z.literal("")),
-  location: z.string().trim().max(300).optional().or(z.literal("")),
+  description: z.string().trim().min(1, "Description is required").max(2000),
+  location: z.string().trim().min(1, "Location is required").max(300),
   placeId: z.string().optional(),
   lat: z.number().optional(),
   lng: z.number().optional(),
-  capacity: z.number().int().positive().max(1_000_000).nullable().optional(),
+  capacity: z.number().int().positive("Capacity is required").max(1_000_000),
   requireApproval: z.boolean(),
   hideLocation: z.boolean(),
   emailGuestRsvp: z.boolean(),
@@ -52,7 +52,7 @@ const createSchema = z.object({
     .datetime()
     .refine((s) => new Date(s).getTime() > Date.now(), "Event must be in the future"), // ISO
   timezone: z.string().optional(),
-  coverUrl: z.string().url().optional(),
+  coverUrl: z.string().url("Cover image is required"),
 })
 
 export type CreateEventResult =
