@@ -1,23 +1,11 @@
 import { auth } from "@clerk/nextjs/server"
 
 import { EventsGrid, type EventGridItem } from "@/components/events-grid"
-import { getOwnedEvents } from "@/lib/db"
+import { getOwnedEventsList } from "@/lib/db"
 
 export default async function MyInvitationsPage() {
   const { userId } = await auth()
-  const owned = userId ? await getOwnedEvents(userId) : []
-
-  const items: EventGridItem[] = owned.map(({ dto, counts }) => ({
-    id: dto.id,
-    name: dto.name,
-    startsAt: dto.startsAt,
-    time: dto.time,
-    cover: dto.cover,
-    coverUrl: dto.coverUrl,
-    location: dto.location,
-    going: counts.going,
-    pending: counts.pending,
-  }))
+  const items: EventGridItem[] = userId ? await getOwnedEventsList(userId) : []
 
   return (
     <>

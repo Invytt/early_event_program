@@ -82,11 +82,19 @@ export function EventDashboard({
   activity: ActivityView[]
 }) {
   const [guests, setGuests] = React.useState<GuestView[]>(initialGuests)
-  const [filter, setFilter] = React.useState<"All" | RsvpStatus>("All")
+  const [filter, setFilterState] = React.useState<"All" | RsvpStatus>("All")
   const [tab, setTab] = React.useState<"Overview" | "Approval queue" | "Guest list">("Overview")
   const [copied, setCopied] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
+  const [queuePage, setQueuePage] = React.useState(1)
+  const [guestPage, setGuestPage] = React.useState(1)
   const router = useRouter()
+
+  // changing the guest-list filter resets to the first page
+  function setFilter(f: "All" | RsvpStatus) {
+    setFilterState(f)
+    setGuestPage(1)
+  }
 
   function runDelete() {
     setDeleting(true)
@@ -117,6 +125,22 @@ export function EventDashboard({
 
   const queue = guests.filter((g) => g.status === "Pending")
   const shown = filter === "All" ? guests : guests.filter((g) => g.status === filter)
+
+  const PAGE_SIZE = 10
+  const queueStart = (queuePage - 1) * PAGE_SIZE
+  const queueShown = queue.slice(queueStart, queueStart + PAGE_SIZE)
+  const guestStart = (guestPage - 1) * PAGE_SIZE
+  const guestShown = shown.slice(guestStart, guestStart + PAGE_SIZE)
+
+  // keep the page in range when the list shrinks (e.g. after an approval)
+  React.useEffect(() => {
+    const max = Math.max(1, Math.ceil(queue.length / PAGE_SIZE))
+    if (queuePage > max) setQueuePage(max)
+  }, [queue.length, queuePage])
+  React.useEffect(() => {
+    const max = Math.max(1, Math.ceil(shown.length / PAGE_SIZE))
+    if (guestPage > max) setGuestPage(max)
+  }, [shown.length, guestPage])
 
   return (
     <>
@@ -307,8 +331,9 @@ export function EventDashboard({
             </p>
           </div>
           {queue.length > 0 && (
+            <>
             <ul className="flex flex-col divide-y divide-border">
-              {queue.map((g) => (
+              {queueShown.map((g) => (
                 <li key={g.id} className="flex items-center gap-3 py-2.5">
                   <Avatar name={g.name} seed={g.id} />
                   <span className="flex flex-col">
@@ -326,6 +351,13 @@ export function EventDashboard({
                 </li>
               ))}
             </ul>
+            <Pager
+              page={queuePage}
+              total={queue.length}
+              pageSize={PAGE_SIZE}
+              onPage={setQueuePage}
+            />
+            </>
           )}
         </section>
         ) : (
@@ -357,7 +389,7 @@ export function EventDashboard({
           </div>
         </div>
         <ul className="flex flex-col divide-y divide-border">
-          {shown.map((g) => (
+          {guestShown.map((g) => (
             <li key={g.id} className="flex items-center gap-3 py-2.5">
               <Avatar name={g.name} seed={g.id} />
               <span className="flex flex-col">
@@ -373,9 +405,47 @@ export function EventDashboard({
             <li className="py-6 text-center text-sm text-muted-foreground">No {filter.toLowerCase()} guests.</li>
           )}
         </ul>
+        <Pager
+          page={guestPage}
+          total={shown.length}
+          pageSize={PAGE_SIZE}
+          onPage={setGuestPage}
+        />
       </section>
       )}
     </>
+  )
+}
+
+function Pager({
+  page,
+  total,
+  pageSize,
+  onPage,
+}: {
+  page: number
+  total: number
+  pageSize: number
+  onPage: (p: number) => void
+}) {
+  const pages = Math.ceil(total / pageSize)
+  if (pages <= 1) return null
+  const start = (page - 1) * pageSize + 1
+  const end = Math.min(total, page * pageSize)
+  return (
+    <div className="mt-4 flex items-center justify-between gap-4 text-sm">
+      <span className="text-muted-foreground tabular-nums">
+        {start}–{end} of {total}
+      </span>
+      <div className="flex gap-2">
+        <Button size="sm" variant="outline" disabled={page <= 1} onClick={() => onPage(page - 1)}>
+          Previous
+        </Button>
+        <Button size="sm" variant="outline" disabled={page >= pages} onClick={() => onPage(page + 1)}>
+          Next
+        </Button>
+      </div>
+    </div>
   )
 }
 

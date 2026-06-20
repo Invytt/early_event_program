@@ -238,21 +238,39 @@ async function doRsvp(
 ): Promise<
   { ok: true; status: RsvpStatus } | { ok: false; error: string }
 > {
-  const user = await currentUser()
-  if (!user) return { ok: false, error: "Not signed in" }
-  if (!rateLimit(`rsvp:${user.id}`, 20, 60_000)) {
+  const { userId, sessionClaims } = await auth()
+  if (!userId) return { ok: false, error: "Not signed in" }
+  if (!rateLimit(`rsvp:${userId}`, 20, 60_000)) {
     return { ok: false, error: "Too many changes — slow down for a moment." }
   }
-  const email =
-    user.primaryEmailAddress?.emailAddress ??
-    user.emailAddresses[0]?.emailAddress ??
-    undefined
-  const name =
-    [user.firstName, user.lastName].filter(Boolean).join(" ") ||
-    user.username ||
-    "Guest"
 
-  const { event, status } = await upsertSelfRsvp(user.id, eventId, going, {
+  // Fast path: pull name/email straight from the session token (local, no
+  // network). To enable, add `email`, `firstName`, `lastName` to the Clerk
+  // session token claims (Dashboard → Sessions → Customize). If absent we fall
+  // back to a currentUser() network fetch so this stays correct either way.
+  const claims = sessionClaims as
+    | { email?: string; firstName?: string; lastName?: string }
+    | undefined
+  let email = claims?.email
+  let name = [claims?.firstName, claims?.lastName].filter(Boolean).join(" ")
+
+  if (!email || !name) {
+    const user = await currentUser()
+    if (!user) return { ok: false, error: "Not signed in" }
+    email =
+      email ??
+      user.primaryEmailAddress?.emailAddress ??
+      user.emailAddresses[0]?.emailAddress ??
+      undefined
+    name =
+      name ||
+      [user.firstName, user.lastName].filter(Boolean).join(" ") ||
+      user.username ||
+      "Guest"
+  }
+  name = name || "Guest"
+
+  const { event, status } = await upsertSelfRsvp(userId, eventId, going, {
     name,
     email,
   })

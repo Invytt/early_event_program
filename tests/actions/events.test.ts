@@ -196,6 +196,8 @@ describe("uploadCoverAction", () => {
 
 describe("rsvpAction", () => {
   beforeEach(() => {
+    // actor is the guest; no email/name in session claims → falls back to currentUser()
+    auth.mockResolvedValue({ userId: "guest_1" })
     currentUser.mockResolvedValue({
       id: "guest_1",
       firstName: "Bob",

@@ -2,7 +2,7 @@ import * as React from "react"
 
 export type Segment = { label: string; value: number; color: string }
 
-export function Donut({
+function DonutBase({
   segments,
   centerLabel,
   centerSub,
@@ -58,7 +58,7 @@ export function Donut({
   )
 }
 
-export function Bars({
+function BarsBase({
   data,
 }: {
   data: { label: string; value: number }[]
@@ -81,3 +81,6 @@ export function Bars({
     </div>
   )
 }
+
+export const Donut = React.memo(DonutBase)
+export const Bars = React.memo(BarsBase)

@@ -27,7 +27,19 @@ function pad(n: number) {
   return String(n).padStart(2, "0")
 }
 
-type EventWithRsvps = Prisma.EventGetPayload<{ include: { rsvps: true } }>
+// Only the rsvp columns the read paths actually use — trims wire payload vs
+// `include: withRsvps` (drops guestEmail / updatedAt / eventId).
+const rsvpSelect = {
+  id: true,
+  status: true,
+  userId: true,
+  guestName: true,
+  createdAt: true,
+} satisfies Prisma.RsvpSelect
+
+const withRsvps = { rsvps: { select: rsvpSelect } } satisfies Prisma.EventInclude
+
+type EventWithRsvps = Prisma.EventGetPayload<{ include: typeof withRsvps }>
 
 function toDTO(e: EventWithRsvps): EventView {
   const going = e.rsvps.filter((r) => r.status === "Going").length
@@ -130,17 +142,50 @@ const LIST_CAP = 500
 export async function getOwnedEvents(ownerId: string) {
   const events = await prisma.event.findMany({
     where: { ownerId },
-    include: { rsvps: true },
+    include: withRsvps,
     orderBy: { startsAt: "asc" },
     take: LIST_CAP,
   })
   return events.map((e) => ({ dto: toDTO(e), counts: countsOf(e), raw: e }))
 }
 
+// Lighter list query for the my-invitations grid: it only needs per-event
+// Going/Pending counts, so we skip loading declined/waitlist rows and every
+// rsvp column (vs getOwnedEvents which loads all rsvps for dashboard analytics).
+export async function getOwnedEventsList(ownerId: string) {
+  const events = await prisma.event.findMany({
+    where: { ownerId },
+    orderBy: { startsAt: "asc" },
+    take: LIST_CAP,
+    select: {
+      id: true,
+      name: true,
+      startsAt: true,
+      coverUrl: true,
+      locationText: true,
+      rsvps: {
+        where: { status: { in: ["Going", "Pending"] } },
+        select: { status: true },
+      },
+    },
+  })
+  return events.map((e) => ({
+    id: e.id,
+    name: e.name,
+    startsAt: e.startsAt.toISOString(),
+    time: `${pad(e.startsAt.getUTCHours())}:${pad(e.startsAt.getUTCMinutes())}`,
+    cover: coverGradient(e.id),
+    coverUrl: e.coverUrl,
+    location: e.locationText ?? "",
+    going: e.rsvps.filter((r) => r.status === "Going").length,
+    pending: e.rsvps.filter((r) => r.status === "Pending").length,
+  }))
+}
+
 export async function getOwnedEvent(ownerId: string, id: string) {
   const e = await prisma.event.findFirst({
     where: { id, ownerId },
-    include: { rsvps: true },
+    include: withRsvps,
   })
   return e
 }
@@ -189,7 +234,7 @@ export function newRsvpsThisWeekFrom(events: EventWithRsvps[]): number {
 export async function getInvitedEvents(userId: string) {
   const events = await prisma.event.findMany({
     where: { rsvps: { some: { userId } } },
-    include: { rsvps: true },
+    include: withRsvps,
     orderBy: { startsAt: "asc" },
     take: LIST_CAP,
   })
@@ -202,7 +247,7 @@ export async function getInvitedEvents(userId: string) {
 
 // PUBLIC read by slug — for the shareable /e/[slug] page (no auth required to view)
 export async function getEventBySlug(slug: string, userId?: string) {
-  const e = await prisma.event.findUnique({ where: { slug }, include: { rsvps: true } })
+  const e = await prisma.event.findUnique({ where: { slug }, include: withRsvps })
   if (!e) return null
   return {
     event: e,
@@ -219,7 +264,7 @@ export async function getEventBySlug(slug: string, userId?: string) {
 // (anyone with the link RSVPs via the public /e/[slug] page first.)
 export async function getEventForViewer(id: string, userId?: string) {
   if (!userId) return null
-  const e = await prisma.event.findUnique({ where: { id }, include: { rsvps: true } })
+  const e = await prisma.event.findUnique({ where: { id }, include: withRsvps })
   if (!e) return null
   const isOwner = e.ownerId === userId
   const hasRsvp = e.rsvps.some((r) => r.userId === userId)
