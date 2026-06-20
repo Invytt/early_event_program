@@ -1,5 +1,7 @@
 import type { Metadata } from "next";
 import { ClerkProvider } from "@clerk/nextjs";
+import { Analytics } from "@vercel/analytics/next";
+import { SpeedInsights } from "@vercel/speed-insights/next";
 import { Playfair_Display, Dancing_Script, Space_Mono, Geist } from "next/font/google";
 import "./globals.css";
 import { cn } from "@/lib/utils";
@@ -40,6 +42,8 @@ export default function RootLayout({
     <html lang="en" className={cn("font-sans", geist.variable)}>
       <body className={`${serif.variable} ${script.variable} ${mono.variable}`}>
         <ClerkProvider>{children}</ClerkProvider>
+        <Analytics />
+        <SpeedInsights />
       </body>
     </html>
   );
