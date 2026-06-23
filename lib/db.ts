@@ -10,6 +10,7 @@ import {
   type GuestView,
   type CountsView,
   type ActivityView,
+  type Faq,
 } from "@/lib/events"
 import { deleteCover } from "@/lib/storage"
 
@@ -299,6 +300,7 @@ export type CreateEventInput = {
   emailHostRsvp: boolean
   emailDecision: boolean
   coverUrl?: string
+  faqs?: Faq[]
 }
 
 function slugify(name: string) {
@@ -338,6 +340,7 @@ export async function createEvent(input: CreateEventInput) {
       emailHostRsvp: input.emailHostRsvp,
       emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
+      faqs: (input.faqs ?? []) as Prisma.InputJsonValue,
       slug,
     },
   })
@@ -374,8 +377,106 @@ export async function updateEvent(
       emailHostRsvp: input.emailHostRsvp,
       emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
+      faqs: (input.faqs ?? []) as Prisma.InputJsonValue,
     },
   })
+}
+
+/* ---------- questionnaire (open Q&A) ---------- */
+
+const QA_CAP = 200
+const QA_BODY_MAX = 2000
+
+export type QuestionRow = Prisma.QuestionGetPayload<{ include: { answers: true } }>
+
+// public read: all questions for an event, newest first, each with its answers
+// (oldest first, so a thread reads top-to-bottom)
+export async function getQuestions(eventId: string): Promise<QuestionRow[]> {
+  return prisma.question.findMany({
+    where: { eventId },
+    include: { answers: { orderBy: { createdAt: "asc" } } },
+    orderBy: { createdAt: "desc" },
+    take: QA_CAP,
+  })
+}
+
+export async function createQuestion(input: {
+  eventId: string
+  authorId: string
+  authorName?: string | null
+  body: string
+}) {
+  const body = input.body.trim().slice(0, QA_BODY_MAX)
+  if (!body) throw new Error("Question can't be empty")
+  // event must exist (FK would throw anyway, but give a clean error)
+  const ev = await prisma.event.findUnique({
+    where: { id: input.eventId },
+    select: { slug: true },
+  })
+  if (!ev) throw new Error("Event not found")
+  const q = await prisma.question.create({
+    data: {
+      eventId: input.eventId,
+      authorId: input.authorId,
+      authorName: input.authorName ?? null,
+      body,
+    },
+  })
+  return { question: q, slug: ev.slug }
+}
+
+export async function createAnswer(input: {
+  questionId: string
+  authorId: string
+  authorName?: string | null
+  body: string
+}) {
+  const body = input.body.trim().slice(0, QA_BODY_MAX)
+  if (!body) throw new Error("Answer can't be empty")
+  const q = await prisma.question.findUnique({
+    where: { id: input.questionId },
+    select: { event: { select: { slug: true } } },
+  })
+  if (!q) throw new Error("Question not found")
+  const a = await prisma.answer.create({
+    data: {
+      questionId: input.questionId,
+      authorId: input.authorId,
+      authorName: input.authorName ?? null,
+      body,
+    },
+  })
+  return { answer: a, slug: q.event.slug }
+}
+
+// delete allowed for the post's author OR the event host
+export async function deleteQuestion(userId: string, id: string) {
+  const q = await prisma.question.findUnique({
+    where: { id },
+    select: { authorId: true, event: { select: { ownerId: true, slug: true } } },
+  })
+  if (!q) throw new Error("Not found")
+  if (q.authorId !== userId && q.event.ownerId !== userId) {
+    throw new Error("Not authorized")
+  }
+  await prisma.question.delete({ where: { id } })
+  return { slug: q.event.slug }
+}
+
+export async function deleteAnswer(userId: string, id: string) {
+  const a = await prisma.answer.findUnique({
+    where: { id },
+    select: {
+      authorId: true,
+      question: { select: { event: { select: { ownerId: true, slug: true } } } },
+    },
+  })
+  if (!a) throw new Error("Not found")
+  if (a.authorId !== userId && a.question.event.ownerId !== userId) {
+    throw new Error("Not authorized")
+  }
+  await prisma.answer.delete({ where: { id } })
+  return { slug: a.question.event.slug }
 }
 
 export async function setRsvpStatus(

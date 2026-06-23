@@ -30,9 +30,9 @@ const SITE_URL = process.env.NEXT_PUBLIC_APP_URL || "https://events.invytt.com";
 const OG_IMAGE = "/og-image.png";
 const LOGO = "/logo-black.png";
 
-const TITLE = "Invytt — Early Event Program";
+const TITLE = "Invytt — Enterprise";
 const DESCRIPTION =
-  "Join the Invytt Early Event Program — host events early with us, get access to exclusive host features, and help build the future of event hosting. Create event invites, collect RSVPs, and manage your guest list.";
+  "Join the Invytt Enterprise program — host events with us, get access to exclusive host features, and help build the future of event hosting. Create event invites, collect RSVPs, and manage your guest list.";
 
 export const metadata: Metadata = {
   metadataBase: new URL(SITE_URL),
@@ -44,7 +44,7 @@ export const metadata: Metadata = {
   applicationName: "Invytt",
   generator: "Next.js",
   keywords: [
-    "early event program",
+    "enterprise event program",
     "event hosting app",
     "event planning India",
     "online invitations",
@@ -73,7 +73,7 @@ export const metadata: Metadata = {
         url: OG_IMAGE,
         width: 1200,
         height: 630,
-        alt: "Invytt — Early Event Program",
+        alt: "Invytt — Enterprise",
       },
     ],
   },
@@ -131,7 +131,7 @@ const jsonLd = {
       "@type": "WebSite",
       "@id": `${SITE_URL}/#website`,
       url: SITE_URL,
-      name: "Invytt — Early Event Program",
+      name: "Invytt — Enterprise",
       description: DESCRIPTION,
       publisher: { "@id": `${SITE_URL}/#organization` },
       inLanguage: "en-IN",
@@ -165,7 +165,10 @@ export default function RootLayout({
           dangerouslySetInnerHTML={{ __html: JSON.stringify(jsonLd) }}
         />
       </head>
-      <body className={`${serif.variable} ${script.variable} ${mono.variable}`}>
+      <body
+        className={`${serif.variable} ${script.variable} ${mono.variable}`}
+        suppressHydrationWarning
+      >
         <ClerkProvider>{children}</ClerkProvider>
         <Analytics />
         <SpeedInsights />

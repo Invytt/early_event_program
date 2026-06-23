@@ -3,6 +3,7 @@ import { auth } from "@clerk/nextjs/server"
 
 import { EventForm } from "@/components/event-form"
 import { getOwnedEvent } from "@/lib/db"
+import { parseFaqs } from "@/lib/events"
 
 export default async function EditEventPage({
   params,
@@ -35,6 +36,7 @@ export default async function EditEventPage({
         emailHostRsvp: event.emailHostRsvp,
         emailDecision: event.emailDecision,
         coverUrl: event.coverUrl,
+        faqs: parseFaqs(event.faqs),
       }}
     />
   )

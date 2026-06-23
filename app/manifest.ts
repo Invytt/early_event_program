@@ -2,10 +2,10 @@ import type { MetadataRoute } from "next";
 
 export default function manifest(): MetadataRoute.Manifest {
   return {
-    name: "Invytt — Early Event Program",
+    name: "Invytt — Enterprise",
     short_name: "Invytt",
     description:
-      "Join the Invytt Early Event Program — host events early with us, get exclusive host features, and help build the future of event hosting.",
+      "Join the Invytt Enterprise program — host events with us, get exclusive host features, and help build the future of event hosting.",
     start_url: "/",
     display: "standalone",
     background_color: "#000000",

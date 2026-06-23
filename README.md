@@ -1,4 +1,4 @@
-# Invytt — Early Events
+# Invytt — Enterprise
 
 Event invitation & RSVP platform. Hosts create event invites, share them, and track
 RSVPs from a dashboard with charts. Built on the Next.js App Router.

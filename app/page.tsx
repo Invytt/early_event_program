@@ -32,7 +32,7 @@ export default function Home() {
 
       <section className="hero">
         <h1 className="title">
-          <span className="scriptle">Early Events</span>
+          <span className="scriptle">Enterprise</span>
         </h1>
 
         <div className="tv-wrap">
@@ -66,13 +66,13 @@ export default function Home() {
           </div>
 
           <p className="tv-caption">
-            Join the early event program to host events
+            Power your organization's events with our
             <br />
-             early with us and get access to
+             enterprise platform — built for scale,
             <br />
-           exclusive host features,
+           with dedicated support, advanced controls,
             <br />
-            and help us build the future of event hosting.
+            and the tools your team needs to host with confidence.
           </p>
         </div>
       </section>

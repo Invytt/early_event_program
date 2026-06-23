@@ -47,6 +47,15 @@ const createSchema = z.object({
   emailGuestRsvp: z.boolean(),
   emailHostRsvp: z.boolean(),
   emailDecision: z.boolean(),
+  faqs: z
+    .array(
+      z.object({
+        q: z.string().trim().min(1).max(200),
+        a: z.string().trim().min(1).max(2000),
+      })
+    )
+    .max(30)
+    .optional(),
   startsAt: z
     .string()
     .datetime()
@@ -88,6 +97,7 @@ export async function createEventAction(
     emailHostRsvp: d.emailHostRsvp,
     emailDecision: d.emailDecision,
     coverUrl: d.coverUrl,
+    faqs: d.faqs,
   })
 
   revalidatePath("/dashboard")
@@ -132,6 +142,7 @@ export async function updateEventAction(
       emailHostRsvp: d.emailHostRsvp,
       emailDecision: d.emailDecision,
       coverUrl: d.coverUrl,
+      faqs: d.faqs,
     })
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/my-invitations")

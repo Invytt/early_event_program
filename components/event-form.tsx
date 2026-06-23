@@ -45,7 +45,10 @@ import {
   ShieldCheckIcon,
   EyeOffIcon,
   SparklesIcon,
+  PlusIcon,
+  Trash2Icon,
 } from "lucide-react"
+import type { Faq } from "@/lib/events"
 
 const HOURS = Array.from({ length: 12 }, (_, i) => String(i + 1).padStart(2, "0"))
 const MINUTES = Array.from({ length: 12 }, (_, i) => String(i * 5).padStart(2, "0"))
@@ -66,6 +69,7 @@ export type EventFormInitial = {
   emailHostRsvp: boolean
   emailDecision: boolean
   coverUrl?: string | null
+  faqs?: Faq[]
 }
 
 // the calendar day the event is on, read in UTC (times are stored as UTC wall-clock)
@@ -121,6 +125,7 @@ export function EventForm({
   const [emailGuestRsvp, setEmailGuestRsvp] = React.useState(initial?.emailGuestRsvp ?? true)
   const [emailHostRsvp, setEmailHostRsvp] = React.useState(initial?.emailHostRsvp ?? true)
   const [emailDecision, setEmailDecision] = React.useState(initial?.emailDecision ?? true)
+  const [faqs, setFaqs] = React.useState<Faq[]>(initial?.faqs ?? [])
   const [coverPicked, setCoverPicked] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -153,6 +158,16 @@ export function EventForm({
     return `${String(h).padStart(2, "0")}:${minute}`
   }
 
+  function addFaq() {
+    setFaqs((prev) => [...prev, { q: "", a: "" }])
+  }
+  function updateFaq(i: number, patch: Partial<Faq>) {
+    setFaqs((prev) => prev.map((f, idx) => (idx === i ? { ...f, ...patch } : f)))
+  }
+  function removeFaq(i: number) {
+    setFaqs((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
   function onCover(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
@@ -180,7 +195,8 @@ export function EventForm({
     hideLocation !== initial.hideLocation ||
     emailGuestRsvp !== initial.emailGuestRsvp ||
     emailHostRsvp !== initial.emailHostRsvp ||
-    emailDecision !== initial.emailDecision
+    emailDecision !== initial.emailDecision ||
+    JSON.stringify(faqs) !== JSON.stringify(initial.faqs ?? [])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -245,6 +261,9 @@ export function EventForm({
       startsAt: dt.toISOString(),
       timezone: Intl.DateTimeFormat().resolvedOptions().timeZone,
       coverUrl,
+      faqs: faqs
+        .map((f) => ({ q: f.q.trim(), a: f.a.trim() }))
+        .filter((f) => f.q && f.a),
     }
 
     const res = isEdit
@@ -563,6 +582,61 @@ export function EventForm({
                     onCheckedChange={setEmailDecision}
                   />
                 </label>
+                </div>
+              </div>
+
+              {/* FAQs */}
+              <div className="flex flex-col gap-4 border-t border-border pt-6">
+                <div className="flex flex-col gap-1">
+                  <Label>FAQs</Label>
+                  <span className="text-sm text-muted-foreground">
+                    Answer common questions up front. Shown to everyone on the event page.
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 pl-4">
+                  {faqs.map((f, i) => (
+                    <div
+                      key={i}
+                      className="flex flex-col gap-2 rounded-lg border border-border bg-background/40 p-3"
+                    >
+                      <div className="flex items-center justify-between gap-2">
+                        <span className="text-xs font-medium text-muted-foreground">
+                          Question {i + 1}
+                        </span>
+                        <button
+                          type="button"
+                          onClick={() => removeFaq(i)}
+                          aria-label={`Remove FAQ ${i + 1}`}
+                          className="rounded-md p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-destructive"
+                        >
+                          <Trash2Icon className="size-4" />
+                        </button>
+                      </div>
+                      <Input
+                        value={f.q}
+                        onChange={(e) => updateFaq(i, { q: e.target.value })}
+                        placeholder="e.g. Is there parking?"
+                        maxLength={200}
+                      />
+                      <Textarea
+                        value={f.a}
+                        onChange={(e) => updateFaq(i, { a: e.target.value })}
+                        rows={2}
+                        placeholder="Write the answer…"
+                        maxLength={2000}
+                      />
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-fit"
+                    onClick={addFaq}
+                    disabled={faqs.length >= 30}
+                  >
+                    <PlusIcon className="size-4" />
+                    Add FAQ
+                  </Button>
                 </div>
               </div>
             </CardContent>

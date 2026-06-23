@@ -2,6 +2,38 @@
 
 export type RsvpStatus = "Going" | "Pending" | "Declined" | "Waitlist"
 
+// host-authored FAQ entry (stored as a JSON array on the event)
+export type Faq = { q: string; a: string }
+
+// one Q&A thread item on the public event page
+export type AnswerView = {
+  id: string
+  author: string
+  body: string
+  when: string
+  canDelete: boolean
+}
+
+export type QuestionView = {
+  id: string
+  author: string
+  body: string
+  when: string
+  canDelete: boolean
+  answers: AnswerView[]
+}
+
+// normalize the JSON `faqs` column into a clean, bounded Faq[]
+export function parseFaqs(raw: unknown): Faq[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((f) => ({
+      q: typeof (f as Faq)?.q === "string" ? (f as Faq).q : "",
+      a: typeof (f as Faq)?.a === "string" ? (f as Faq).a : "",
+    }))
+    .filter((f) => f.q.trim() && f.a.trim())
+}
+
 export type EventView = {
   id: string
   slug: string
@@ -67,6 +99,16 @@ export function formatTime(t: string): string {
   const period = h >= 12 ? "PM" : "AM"
   const h12 = h % 12 || 12
   return `${h12}:${String(m).padStart(2, "0")} ${period}`
+}
+
+// short relative-time label ("just now", "5m ago", "3h ago", "2d ago")
+export function relativeTime(d: Date | string): string {
+  const t = typeof d === "string" ? new Date(d).getTime() : d.getTime()
+  const s = (Date.now() - t) / 1000
+  if (s < 60) return "just now"
+  if (s < 3600) return `${Math.floor(s / 60)}m ago`
+  if (s < 86400) return `${Math.floor(s / 3600)}h ago`
+  return `${Math.floor(s / 86400)}d ago`
 }
 
 // days from a reference "today" (ISO) to the event; positive = upcoming

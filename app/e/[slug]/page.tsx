@@ -13,8 +13,15 @@ import {
 } from "lucide-react"
 
 import { PublicRsvp } from "@/components/public-rsvp"
-import { getEventBySlug } from "@/lib/db"
-import { formatTime, coverGradient } from "@/lib/events"
+import { Questionnaire } from "@/components/questionnaire"
+import { getEventBySlug, getQuestions } from "@/lib/db"
+import {
+  formatTime,
+  coverGradient,
+  parseFaqs,
+  relativeTime,
+  type QuestionView,
+} from "@/lib/events"
 
 export async function generateMetadata({
   params,
@@ -59,6 +66,23 @@ export default async function PublicEventPage({
   if (!data) notFound()
 
   const { event, dto, counts, myStatus } = data
+  const isHost = Boolean(userId) && userId === event.ownerId
+  const faqs = parseFaqs(event.faqs)
+  const questionRows = await getQuestions(event.id)
+  const questions: QuestionView[] = questionRows.map((q) => ({
+    id: q.id,
+    author: q.authorName ?? "Guest",
+    body: q.body,
+    when: relativeTime(q.createdAt),
+    canDelete: isHost || q.authorId === userId,
+    answers: q.answers.map((a) => ({
+      id: a.id,
+      author: a.authorName ?? "Guest",
+      body: a.body,
+      when: relativeTime(a.createdAt),
+      canDelete: isHost || a.authorId === userId,
+    })),
+  }))
   const dateLabel = format(event.startsAt, "EEEE, MMMM d, yyyy")
   const time = `${String(event.startsAt.getUTCHours()).padStart(2, "0")}:${String(
     event.startsAt.getUTCMinutes()
@@ -80,7 +104,7 @@ export default async function PublicEventPage({
         {/* Brand */}
         <div className="logo">
           <Image src="/logo.png" alt="Invytt" width={401} height={170} className="logo-img" priority />
-          <span className="scriptle">Early Event Program</span>
+          <span className="scriptle">Enterprise</span>
         </div>
 
         {/* Cover */}
@@ -151,8 +175,34 @@ export default async function PublicEventPage({
           slug={event.slug}
           initialStatus={myStatus}
           signedIn={Boolean(userId)}
-          isHost={Boolean(userId) && userId === event.ownerId}
+          isHost={isHost}
           requireApproval={event.requireApproval}
+        />
+
+        {faqs.length > 0 && (
+          <section className="flex flex-col gap-3 border-t border-border pt-6">
+            <h2 className="font-semibold">FAQs</h2>
+            <div className="flex flex-col gap-3">
+              {faqs.map((f, i) => (
+                <div
+                  key={i}
+                  className="flex flex-col gap-1 rounded-lg border border-border bg-[var(--paper-2)] p-4"
+                >
+                  <p className="text-sm font-medium">{f.q}</p>
+                  <p className="text-sm leading-relaxed text-muted-foreground whitespace-pre-wrap">
+                    {f.a}
+                  </p>
+                </div>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <Questionnaire
+          eventId={event.id}
+          slug={event.slug}
+          questions={questions}
+          signedIn={Boolean(userId)}
         />
       </div>
     </div>

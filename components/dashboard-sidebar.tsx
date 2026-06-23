@@ -131,7 +131,7 @@ export function DashboardSidebar() {
             <div className="logo px-2 py-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="Invytt" className="logo-img" />
-              <span className="scriptle">Early Event Program</span>
+              <span className="scriptle">Enterprise</span>
             </div>
             <button
               onClick={() => setMobileOpen(false)}
@@ -166,7 +166,7 @@ export function DashboardSidebar() {
             <div className="logo px-2 py-1.5">
               {/* eslint-disable-next-line @next/next/no-img-element */}
               <img src="/logo.png" alt="Invytt" className="logo-img" />
-              <span className="scriptle">Early Event Program</span>
+              <span className="scriptle">Enterprise</span>
             </div>
           )}
           <button

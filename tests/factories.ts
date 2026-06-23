@@ -39,6 +39,7 @@ export function makeEvent(over: Partial<Record<string, unknown>> = {}) {
     emailGuestRsvp: true,
     emailHostRsvp: true,
     emailDecision: true,
+    faqs: null as unknown as never,
     slug: "test-event",
     createdAt: new Date("2026-06-01T00:00:00.000Z"),
     updatedAt: new Date("2026-06-01T00:00:00.000Z"),
