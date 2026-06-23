@@ -69,6 +69,9 @@ if (process.env.NODE_ENV === "production" && !process.env.NEXT_PUBLIC_APP_URL) {
   )
 }
 const APP_URL = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(/\/$/, "")
+// absolute URL to the email header logo (served from /public). Emails need a
+// fully-qualified https URL; override with EMAIL_LOGO_URL if hosted elsewhere.
+const LOGO_URL = (process.env.EMAIL_LOGO_URL || `${APP_URL}/logo.png`).trim()
 
 export function rsvpConfirmationEmail(args: {
   to: Recipient
@@ -89,6 +92,7 @@ export function rsvpConfirmationEmail(args: {
     templateId,
     dynamicData: {
       subject,
+      logo_url: LOGO_URL,
       accent: "#15803d",
       heading: "Your RSVP has been registered",
       guest_name: args.to.name || "there",
@@ -123,6 +127,7 @@ export function approvalDecisionEmail(args: {
     templateId,
     dynamicData: {
       subject,
+      logo_url: LOGO_URL,
       accent: args.approved ? "#15803d" : "#b91c1c",
       guest_name: args.guestName || args.to.name || "there",
       event_name: args.eventName,
@@ -161,6 +166,7 @@ export function hostNewRsvpEmail(args: {
     templateId,
     dynamicData: {
       subject,
+      logo_url: LOGO_URL,
       accent: args.pending ? "#b45309" : "#15803d",
       host_name: args.hostName || "there",
       guest_name: args.guestName,
