@@ -11,7 +11,6 @@ import {
   MapPinIcon,
   CheckIcon,
   XIcon,
-  Share2Icon,
   Trash2Icon,
   PencilIcon,
 } from "lucide-react"
@@ -28,6 +27,7 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import { ShareDialog } from "@/components/share-dialog"
 import { Donut } from "@/components/charts"
 import { RsvpChart, type SeriesPoint } from "@/components/rsvp-chart"
 import {
@@ -84,7 +84,6 @@ export function EventDashboard({
   const [guests, setGuests] = React.useState<GuestView[]>(initialGuests)
   const [filter, setFilterState] = React.useState<"All" | RsvpStatus>("All")
   const [tab, setTab] = React.useState<"Overview" | "Approval queue" | "Guest list">("Overview")
-  const [copied, setCopied] = React.useState(false)
   const [deleting, setDeleting] = React.useState(false)
   const [queuePage, setQueuePage] = React.useState(1)
   const [guestPage, setGuestPage] = React.useState(1)
@@ -176,21 +175,7 @@ export function EventDashboard({
             <p className="text-sm text-white/80">Hosted by {event.host}</p>
           </div>
           <div className="flex gap-2">
-            <Button
-              size="sm"
-              variant="secondary"
-              className="gap-1.5"
-              onClick={() => {
-                navigator.clipboard?.writeText(
-                  `${typeof window !== "undefined" ? window.location.origin : ""}/e/${event.slug}`
-                )
-                setCopied(true)
-                setTimeout(() => setCopied(false), 1500)
-              }}
-            >
-              <Share2Icon className="size-4" />
-              {copied ? "Copied!" : "Share"}
-            </Button>
+            <ShareDialog eventId={event.id} slug={event.slug} />
             <Button asChild size="sm" variant="secondary" className="gap-1.5">
               <Link href={`/dashboard/events/${event.id}/edit`}>
                 <PencilIcon className="size-4" />

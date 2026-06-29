@@ -11,6 +11,7 @@ import {
   rsvpConfirmationEmail,
   approvalDecisionEmail,
   hostNewRsvpEmail,
+  eventInviteEmail,
 } from "@/lib/email"
 
 import {
@@ -19,6 +20,7 @@ import {
   setRsvpStatus,
   deleteEvent,
   upsertSelfRsvp,
+  getOwnedEvent,
 } from "@/lib/db"
 import { uploadCover, storageConfigured } from "@/lib/storage"
 import { rateLimit } from "@/lib/ratelimit"
@@ -330,6 +332,85 @@ async function doRsvp(
   revalidatePath("/dashboard/invites")
   revalidatePath(`/e/${event.slug}`)
   return { ok: true, status }
+}
+
+const emailSchema = z.string().trim().email().max(254)
+const MAX_INVITES_PER_BATCH = 50
+
+export type SendInvitesResult =
+  | { ok: true; sent: number; invalid: string[] }
+  | { ok: false; error: string }
+
+// Host-only: email the shareable invite link to one or more recipients.
+// Invalid addresses are skipped and reported back rather than failing the batch.
+export async function sendEventInviteAction(
+  eventId: string,
+  emails: string[]
+): Promise<SendInvitesResult> {
+  if (!idSchema.safeParse(eventId).success) {
+    return { ok: false, error: "Invalid event" }
+  }
+  if (!Array.isArray(emails) || emails.length === 0) {
+    return { ok: false, error: "Add at least one email" }
+  }
+
+  // normalize, dedupe, then split valid / invalid
+  const seen = new Set<string>()
+  const valid: string[] = []
+  const invalid: string[] = []
+  for (const raw of emails) {
+    const e = String(raw).trim()
+    if (!e) continue
+    const key = e.toLowerCase()
+    if (seen.has(key)) continue
+    seen.add(key)
+    if (emailSchema.safeParse(e).success) valid.push(e)
+    else invalid.push(e)
+  }
+
+  if (valid.length === 0) {
+    return { ok: false, error: "No valid emails to send to" }
+  }
+  if (valid.length > MAX_INVITES_PER_BATCH) {
+    return { ok: false, error: `Too many at once — max ${MAX_INVITES_PER_BATCH} per send.` }
+  }
+
+  try {
+    const { userId } = await auth()
+    if (!userId) return { ok: false, error: "Not signed in" }
+    if (!rateLimit(`invite:${userId}`, 100, 60_000)) {
+      return { ok: false, error: "Too many invites — slow down for a moment." }
+    }
+    const event = await getOwnedEvent(userId, eventId)
+    if (!event) return { ok: false, error: "Event not found" }
+
+    const appUrl = (process.env.NEXT_PUBLIC_APP_URL || "http://localhost:3000").replace(
+      /\/$/,
+      ""
+    )
+    const url = `${appUrl}/e/${event.slug}`
+    const whenLabel = whenOf(event.startsAt)
+    // don't leak a hidden venue in the invite email
+    const location = event.hideLocation
+      ? "Revealed once the host approves you"
+      : event.locationText
+    await Promise.all(
+      valid.map((email) =>
+        eventInviteEmail({
+          to: { email },
+          eventName: event.name,
+          whenLabel,
+          location,
+          coverUrl: event.coverUrl,
+          url,
+        })
+      )
+    )
+    return { ok: true, sent: valid.length, invalid }
+  } catch (e) {
+    reportError("sendEventInviteAction", e)
+    return { ok: false, error: e instanceof Error ? e.message : "Something went wrong" }
+  }
 }
 
 export async function deleteEventAction(id: string): Promise<ActionResult> {
