@@ -64,14 +64,16 @@ export default async function PublicEventPage({
   const { event, dto, counts, myStatus } = data
   const isHost = Boolean(userId) && userId === event.ownerId
 
-  // resolve the host's real display name (public viewers shouldn't see "You")
+  // resolve the host's real display name + avatar (public viewers shouldn't see "You")
   let hostName = "the host"
+  let hostImage: string | null = null
   try {
     const host = await (await clerkClient()).users.getUser(event.ownerId)
     hostName =
       [host.firstName, host.lastName].filter(Boolean).join(" ") ||
       host.username ||
       hostName
+    hostImage = host.imageUrl || null
   } catch {
     /* host lookup failed — fall back to generic label */
   }
@@ -125,7 +127,18 @@ export default async function PublicEventPage({
 
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-          <p className="text-sm text-muted-foreground">Hosted by {hostName}</p>
+          <div className="flex items-center gap-2">
+            {hostImage && (
+              <Image
+                src={hostImage}
+                alt=""
+                width={24}
+                height={24}
+                className="size-6 rounded-full object-cover"
+              />
+            )}
+            <p className="text-sm text-muted-foreground">Hosted by {hostName}</p>
+          </div>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">

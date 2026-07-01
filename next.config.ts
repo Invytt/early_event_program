@@ -15,6 +15,11 @@ const nextConfig: NextConfig = {
         hostname: "*.supabase.co",
         pathname: "/storage/v1/object/public/**",
       },
+      // Clerk user avatars (host profile picture)
+      {
+        protocol: "https",
+        hostname: "img.clerk.com",
+      },
     ],
   },
   async headers() {
