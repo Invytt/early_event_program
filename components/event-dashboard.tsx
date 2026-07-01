@@ -478,12 +478,39 @@ export function EventDashboard({
             {openResponse?.answers.map((qa, i) => (
               <div key={i} className="flex flex-col gap-1">
                 <p className="text-sm font-medium text-foreground">{qa.q}</p>
-                <p className="text-sm whitespace-pre-wrap text-muted-foreground">{qa.a}</p>
+                <p className="text-sm whitespace-pre-wrap text-muted-foreground">
+                  <Linkify text={qa.a} />
+                </p>
               </div>
             ))}
           </div>
         </DialogContent>
       </Dialog>
+    </>
+  )
+}
+
+// Render text with any URLs as new-tab links, styled as plain text (no
+// underline / accent color) so answers read normally but links still work.
+function Linkify({ text }: { text: string }) {
+  const parts = text.split(/(https?:\/\/[^\s]+)/g)
+  return (
+    <>
+      {parts.map((part, i) =>
+        /^https?:\/\//.test(part) ? (
+          <a
+            key={i}
+            href={part}
+            target="_blank"
+            rel="noopener noreferrer"
+            className="break-all text-inherit no-underline hover:opacity-70"
+          >
+            {part}
+          </a>
+        ) : (
+          <React.Fragment key={i}>{part}</React.Fragment>
+        )
+      )}
     </>
   )
 }
