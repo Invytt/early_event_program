@@ -142,7 +142,7 @@ export default async function PublicEventPage({
         {event.description && (
           <section className="flex flex-col gap-2">
             <h2 className="font-semibold">About this event</h2>
-            <p className="text-sm leading-relaxed text-muted-foreground">
+            <p className="text-sm leading-relaxed whitespace-pre-line text-muted-foreground">
               {event.description}
             </p>
           </section>

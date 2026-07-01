@@ -824,7 +824,7 @@ function EventPreview({
       <div className="flex flex-col gap-1.5">
         <h3 className="text-sm font-semibold">About this event</h3>
         <p
-          className={`text-sm leading-relaxed ${
+          className={`text-sm leading-relaxed whitespace-pre-line ${
             description ? "text-muted-foreground" : "text-muted-foreground/60"
           }`}
         >
