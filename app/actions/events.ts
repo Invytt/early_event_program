@@ -21,6 +21,7 @@ import {
   deleteEvent,
   upsertSelfRsvp,
   getOwnedEvent,
+  needsQuestionnaire,
 } from "@/lib/db"
 import { uploadCover, storageConfigured } from "@/lib/storage"
 import { rateLimit } from "@/lib/ratelimit"
@@ -56,6 +57,10 @@ const createSchema = z.object({
         a: z.string().trim().min(1).max(2000),
       })
     )
+    .max(30)
+    .optional(),
+  questionnaire: z
+    .array(z.string().trim().min(1).max(200))
     .max(30)
     .optional(),
   startsAt: z
@@ -100,6 +105,7 @@ export async function createEventAction(
     emailDecision: d.emailDecision,
     coverUrl: d.coverUrl,
     faqs: d.faqs,
+    questionnaire: d.questionnaire,
   })
 
   revalidatePath("/dashboard")
@@ -145,6 +151,7 @@ export async function updateEventAction(
       emailDecision: d.emailDecision,
       coverUrl: d.coverUrl,
       faqs: d.faqs,
+      questionnaire: d.questionnaire,
     })
     revalidatePath("/dashboard")
     revalidatePath("/dashboard/my-invitations")
@@ -255,6 +262,11 @@ async function doRsvp(
   if (!userId) return { ok: false, error: "Not signed in" }
   if (!rateLimit(`rsvp:${userId}`, 20, 60_000)) {
     return { ok: false, error: "Too many changes — slow down for a moment." }
+  }
+
+  // if the host set a questionnaire, it must be answered before going
+  if (going && (await needsQuestionnaire(eventId, userId))) {
+    return { ok: false, error: "Please answer the questionnaire before you RSVP." }
   }
 
   // Fast path: pull name/email straight from the session token (local, no

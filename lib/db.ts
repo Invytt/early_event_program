@@ -11,6 +11,8 @@ import {
   type CountsView,
   type ActivityView,
   type Faq,
+  type QaPair,
+  parseQuestionnaire,
 } from "@/lib/events"
 import { deleteCover } from "@/lib/storage"
 
@@ -301,6 +303,7 @@ export type CreateEventInput = {
   emailDecision: boolean
   coverUrl?: string
   faqs?: Faq[]
+  questionnaire?: string[]
 }
 
 function slugify(name: string) {
@@ -341,6 +344,7 @@ export async function createEvent(input: CreateEventInput) {
       emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
       faqs: (input.faqs ?? []) as Prisma.InputJsonValue,
+      questionnaire: (input.questionnaire ?? []) as Prisma.InputJsonValue,
       slug,
     },
   })
@@ -378,105 +382,84 @@ export async function updateEvent(
       emailDecision: input.emailDecision,
       coverUrl: input.coverUrl || null,
       faqs: (input.faqs ?? []) as Prisma.InputJsonValue,
+      questionnaire: (input.questionnaire ?? []) as Prisma.InputJsonValue,
     },
   })
 }
 
-/* ---------- questionnaire (open Q&A) ---------- */
+/* ---------- questionnaire (host questions, private guest answers) ---------- */
 
-const QA_CAP = 200
-const QA_BODY_MAX = 2000
-
-export type QuestionRow = Prisma.QuestionGetPayload<{ include: { answers: true } }>
-
-// public read: all questions for an event, newest first, each with its answers
-// (oldest first, so a thread reads top-to-bottom)
-export async function getQuestions(eventId: string): Promise<QuestionRow[]> {
-  return prisma.question.findMany({
-    where: { eventId },
-    include: { answers: { orderBy: { createdAt: "asc" } } },
-    orderBy: { createdAt: "desc" },
-    take: QA_CAP,
-  })
-}
-
-export async function createQuestion(input: {
+// guest submits (or updates) their answers to the event questionnaire.
+// One row per (eventId, userId); re-submitting overwrites the previous answers.
+export async function submitQuestionnaireResponse(input: {
   eventId: string
-  authorId: string
-  authorName?: string | null
-  body: string
+  userId: string
+  guestName?: string | null
+  guestEmail?: string | null
+  answers: QaPair[]
 }) {
-  const body = input.body.trim().slice(0, QA_BODY_MAX)
-  if (!body) throw new Error("Question can't be empty")
-  // event must exist (FK would throw anyway, but give a clean error)
   const ev = await prisma.event.findUnique({
     where: { id: input.eventId },
     select: { slug: true },
   })
   if (!ev) throw new Error("Event not found")
-  const q = await prisma.question.create({
-    data: {
+  const answers = input.answers as unknown as Prisma.InputJsonValue
+  await prisma.questionnaireResponse.upsert({
+    where: { eventId_userId: { eventId: input.eventId, userId: input.userId } },
+    create: {
       eventId: input.eventId,
-      authorId: input.authorId,
-      authorName: input.authorName ?? null,
-      body,
+      userId: input.userId,
+      guestName: input.guestName ?? null,
+      guestEmail: input.guestEmail ?? null,
+      answers,
+    },
+    update: {
+      guestName: input.guestName ?? undefined,
+      guestEmail: input.guestEmail ?? undefined,
+      answers,
     },
   })
-  return { question: q, slug: ev.slug }
+  return { slug: ev.slug }
 }
 
-export async function createAnswer(input: {
-  questionId: string
-  authorId: string
-  authorName?: string | null
-  body: string
-}) {
-  const body = input.body.trim().slice(0, QA_BODY_MAX)
-  if (!body) throw new Error("Answer can't be empty")
-  const q = await prisma.question.findUnique({
-    where: { id: input.questionId },
-    select: { event: { select: { slug: true } } },
+// true if the event has questionnaire questions the guest hasn't answered yet.
+// used to block "Going" until the questionnaire is completed.
+export async function needsQuestionnaire(
+  eventId: string,
+  userId: string
+): Promise<boolean> {
+  const ev = await prisma.event.findUnique({
+    where: { id: eventId },
+    select: { questionnaire: true },
   })
-  if (!q) throw new Error("Question not found")
-  const a = await prisma.answer.create({
-    data: {
-      questionId: input.questionId,
-      authorId: input.authorId,
-      authorName: input.authorName ?? null,
-      body,
-    },
+  if (parseQuestionnaire(ev?.questionnaire).length === 0) return false
+  const resp = await prisma.questionnaireResponse.findUnique({
+    where: { eventId_userId: { eventId, userId } },
+    select: { id: true },
   })
-  return { answer: a, slug: q.event.slug }
+  return !resp
 }
 
-// delete allowed for the post's author OR the event host
-export async function deleteQuestion(userId: string, id: string) {
-  const q = await prisma.question.findUnique({
-    where: { id },
-    select: { authorId: true, event: { select: { ownerId: true, slug: true } } },
+// has this signed-in guest already submitted answers for this event?
+export async function getMyResponse(eventId: string, userId: string) {
+  return prisma.questionnaireResponse.findUnique({
+    where: { eventId_userId: { eventId, userId } },
+    select: { id: true },
   })
-  if (!q) throw new Error("Not found")
-  if (q.authorId !== userId && q.event.ownerId !== userId) {
-    throw new Error("Not authorized")
-  }
-  await prisma.question.delete({ where: { id } })
-  return { slug: q.event.slug }
 }
 
-export async function deleteAnswer(userId: string, id: string) {
-  const a = await prisma.answer.findUnique({
-    where: { id },
-    select: {
-      authorId: true,
-      question: { select: { event: { select: { ownerId: true, slug: true } } } },
-    },
+// host-only: all questionnaire responses for an owned event, newest first
+export async function getEventResponses(ownerId: string, eventId: string) {
+  const ev = await prisma.event.findFirst({
+    where: { id: eventId, ownerId },
+    select: { id: true },
   })
-  if (!a) throw new Error("Not found")
-  if (a.authorId !== userId && a.question.event.ownerId !== userId) {
-    throw new Error("Not authorized")
-  }
-  await prisma.answer.delete({ where: { id } })
-  return { slug: a.question.event.slug }
+  if (!ev) return []
+  return prisma.questionnaireResponse.findMany({
+    where: { eventId },
+    orderBy: { createdAt: "desc" },
+    take: LIST_CAP,
+  })
 }
 
 export async function setRsvpStatus(

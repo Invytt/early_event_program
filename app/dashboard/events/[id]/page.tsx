@@ -5,12 +5,20 @@ import { auth } from "@clerk/nextjs/server"
 import { EventDashboard } from "@/components/event-dashboard"
 import {
   getOwnedEvent,
+  getEventResponses,
   countsOf,
   guestsOf,
   seriesOf,
   activityOf,
 } from "@/lib/db"
-import { formatTime, daysUntil, coverGradient } from "@/lib/events"
+import {
+  formatTime,
+  daysUntil,
+  coverGradient,
+  relativeTime,
+  parseQaPairs,
+  type ResponseView,
+} from "@/lib/events"
 
 export default async function EventDashboardPage({
   params,
@@ -23,6 +31,15 @@ export default async function EventDashboardPage({
 
   const event = await getOwnedEvent(userId, id)
   if (!event) notFound()
+
+  const responseRows = await getEventResponses(userId, id)
+  const responses: ResponseView[] = responseRows.map((r) => ({
+    id: r.id,
+    guest: r.guestName ?? "Guest",
+    email: r.guestEmail ?? null,
+    when: relativeTime(r.createdAt),
+    answers: parseQaPairs(r.answers),
+  }))
 
   const counts = countsOf(event)
   const date = event.startsAt.toISOString().slice(0, 10)
@@ -56,6 +73,7 @@ export default async function EventDashboardPage({
       timeLabel={formatTime(time)}
       daysAway={daysUntil(event.startsAt.toISOString(), new Date().toISOString())}
       activity={activityOf(event)}
+      responses={responses}
     />
   )
 }

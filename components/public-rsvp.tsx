@@ -5,7 +5,9 @@ import { SignUpButton } from "@clerk/nextjs"
 import { CheckCircle2Icon, ClockIcon } from "lucide-react"
 
 import { Button } from "@/components/ui/button"
+import { Textarea } from "@/components/ui/textarea"
 import { rsvpAction } from "@/app/actions/events"
+import { submitQuestionnaireAction } from "@/app/actions/questionnaire"
 import type { RsvpStatus } from "@/lib/events"
 
 export function PublicRsvp({
@@ -15,6 +17,8 @@ export function PublicRsvp({
   signedIn,
   isHost,
   requireApproval,
+  questions = [],
+  alreadyAnswered = false,
 }: {
   eventId: string
   slug: string
@@ -22,14 +26,32 @@ export function PublicRsvp({
   signedIn: boolean
   isHost: boolean
   requireApproval: boolean
+  questions?: string[]
+  alreadyAnswered?: boolean
 }) {
   const [status, setStatus] = React.useState<RsvpStatus | null>(initialStatus)
   const [error, setError] = React.useState<string | null>(null)
   const [pending, startTransition] = React.useTransition()
 
+  // questionnaire must be completed before "Going" (once answered, it's gone)
+  const hasQuestions = questions.length > 0 && !alreadyAnswered
+  const [answers, setAnswers] = React.useState<string[]>(() =>
+    questions.map(() => "")
+  )
+  const allAnswered = questions.every((_, i) => (answers[i] ?? "").trim().length > 0)
+
   function respond(going: boolean) {
     setError(null)
     startTransition(async () => {
+      // going + questionnaire → submit answers first, then RSVP (one click)
+      if (going && hasQuestions) {
+        const payload = questions.map((q, i) => ({ q, a: (answers[i] ?? "").trim() }))
+        const r1 = await submitQuestionnaireAction(eventId, payload)
+        if (!r1.ok) {
+          setError(r1.error)
+          return
+        }
+      }
       const res = await rsvpAction(eventId, going)
       if (res.ok) setStatus(res.status)
       else setError(res.error)
@@ -49,10 +71,22 @@ export function PublicRsvp({
     )
   }
 
-  // Not signed in
+  // Not signed in — questions are readable by all, but answering needs sign-in
   if (!signedIn) {
     return (
-      <div className="flex flex-col gap-2 border-t border-border pt-6">
+      <div className="flex flex-col gap-3 border-t border-border pt-6">
+        {questions.length > 0 && (
+          <div className="flex flex-col gap-2">
+            <h2 className="font-semibold">Questionnaire</h2>
+            <ol className="flex list-decimal flex-col gap-1.5 pl-5">
+              {questions.map((q, i) => (
+                <li key={i} className="text-sm text-foreground">
+                  {q}
+                </li>
+              ))}
+            </ol>
+          </div>
+        )}
         <p className="text-sm text-muted-foreground">Sign in to RSVP to this event.</p>
         <SignUpButton
           mode="modal"
@@ -119,13 +153,46 @@ export function PublicRsvp({
     )
   }
 
-  // Fresh — show RSVP buttons
+  // Fresh — questionnaire (if any) + RSVP buttons
   return (
-    <div className="flex flex-col gap-2 border-t border-border pt-6">
+    <div className="flex flex-col gap-4 border-t border-border pt-6">
+      {hasQuestions && (
+        <div className="flex flex-col gap-4">
+          <div className="flex flex-col gap-1">
+            <h2 className="font-semibold">Questionnaire</h2>
+            <p className="text-sm text-muted-foreground">
+              The host would like a few details before you RSVP. Shared only with the host.
+            </p>
+          </div>
+          {questions.map((q, i) => (
+            <div key={i} className="flex flex-col gap-1.5">
+              <label htmlFor={`q-${i}`} className="text-sm font-medium">
+                {i + 1}. {q}
+              </label>
+              <Textarea
+                id={`q-${i}`}
+                rows={2}
+                maxLength={2000}
+                value={answers[i] ?? ""}
+                onChange={(e) =>
+                  setAnswers((prev) => {
+                    const next = [...prev]
+                    next[i] = e.target.value
+                    return next
+                  })
+                }
+                placeholder="Your answer…"
+              />
+            </div>
+          ))}
+        </div>
+      )}
+
       <div className="flex gap-2">
+        {/* Going stays visible but is disabled until the questionnaire is done */}
         <Button
           className="flex-1 sm:flex-none"
-          disabled={pending}
+          disabled={pending || (hasQuestions && !allAnswered)}
           onClick={() => respond(true)}
         >
           {pending ? "…" : "Going"}
@@ -139,6 +206,12 @@ export function PublicRsvp({
           Can&apos;t go
         </Button>
       </div>
+
+      {hasQuestions && !allAnswered && (
+        <p className="text-xs text-muted-foreground">
+          Answer all questions to RSVP as going.
+        </p>
+      )}
       {requireApproval && (
         <p className="text-xs text-muted-foreground">
           This event requires host approval — you&apos;ll be confirmed once approved.

@@ -70,6 +70,7 @@ export type EventFormInitial = {
   emailDecision: boolean
   coverUrl?: string | null
   faqs?: Faq[]
+  questionnaire?: string[]
 }
 
 // the calendar day the event is on, read in UTC (times are stored as UTC wall-clock)
@@ -126,6 +127,9 @@ export function EventForm({
   const [emailHostRsvp, setEmailHostRsvp] = React.useState(initial?.emailHostRsvp ?? true)
   const [emailDecision, setEmailDecision] = React.useState(initial?.emailDecision ?? true)
   const [faqs, setFaqs] = React.useState<Faq[]>(initial?.faqs ?? [])
+  const [questionnaire, setQuestionnaire] = React.useState<string[]>(
+    initial?.questionnaire ?? []
+  )
   const [coverPicked, setCoverPicked] = React.useState(false)
   const [submitting, setSubmitting] = React.useState(false)
   const [error, setError] = React.useState<string | null>(null)
@@ -168,6 +172,16 @@ export function EventForm({
     setFaqs((prev) => prev.filter((_, idx) => idx !== i))
   }
 
+  function addQuestion() {
+    setQuestionnaire((prev) => [...prev, ""])
+  }
+  function updateQuestion(i: number, value: string) {
+    setQuestionnaire((prev) => prev.map((q, idx) => (idx === i ? value : q)))
+  }
+  function removeQuestion(i: number) {
+    setQuestionnaire((prev) => prev.filter((_, idx) => idx !== i))
+  }
+
   function onCover(e: React.ChangeEvent<HTMLInputElement>) {
     const file = e.target.files?.[0]
     if (file) {
@@ -196,7 +210,8 @@ export function EventForm({
     emailGuestRsvp !== initial.emailGuestRsvp ||
     emailHostRsvp !== initial.emailHostRsvp ||
     emailDecision !== initial.emailDecision ||
-    JSON.stringify(faqs) !== JSON.stringify(initial.faqs ?? [])
+    JSON.stringify(faqs) !== JSON.stringify(initial.faqs ?? []) ||
+    JSON.stringify(questionnaire) !== JSON.stringify(initial.questionnaire ?? [])
 
   async function onSubmit(e: React.FormEvent<HTMLFormElement>) {
     e.preventDefault()
@@ -264,6 +279,7 @@ export function EventForm({
       faqs: faqs
         .map((f) => ({ q: f.q.trim(), a: f.a.trim() }))
         .filter((f) => f.q && f.a),
+      questionnaire: questionnaire.map((q) => q.trim()).filter(Boolean),
     }
 
     const res = isEdit
@@ -309,7 +325,7 @@ export function EventForm({
                 <Label>Event cover</Label>
                 <label
                   htmlFor="cover"
-                  className="group relative flex aspect-[16/9] w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-background/40 transition-colors hover:bg-background/70"
+                  className="group relative flex aspect-square w-full cursor-pointer items-center justify-center overflow-hidden rounded-lg border border-dashed border-border bg-background/40 transition-colors hover:bg-background/70"
                 >
                   {cover ? (
                     // eslint-disable-next-line @next/next/no-img-element
@@ -639,6 +655,46 @@ export function EventForm({
                   </Button>
                 </div>
               </div>
+
+              {/* Questionnaire */}
+              <div className="flex flex-col gap-4 border-t border-border pt-6">
+                <div className="flex flex-col gap-1">
+                  <Label>Questionnaire</Label>
+                  <span className="text-sm text-muted-foreground">
+                    Questions guests answer privately. Everyone sees the questions; only you see the answers (in Responses).
+                  </span>
+                </div>
+                <div className="flex flex-col gap-4 pl-4">
+                  {questionnaire.map((q, i) => (
+                    <div key={i} className="flex items-start gap-2">
+                      <Input
+                        value={q}
+                        onChange={(e) => updateQuestion(i, e.target.value)}
+                        placeholder={`Question ${i + 1} — e.g. Any dietary restrictions?`}
+                        maxLength={200}
+                      />
+                      <button
+                        type="button"
+                        onClick={() => removeQuestion(i)}
+                        aria-label={`Remove question ${i + 1}`}
+                        className="mt-1.5 rounded-md p-1 text-muted-foreground transition-colors hover:bg-black/5 hover:text-destructive"
+                      >
+                        <Trash2Icon className="size-4" />
+                      </button>
+                    </div>
+                  ))}
+                  <Button
+                    type="button"
+                    variant="outline"
+                    className="w-fit"
+                    onClick={addQuestion}
+                    disabled={questionnaire.length >= 30}
+                  >
+                    <PlusIcon className="size-4" />
+                    Add question
+                  </Button>
+                </div>
+              </div>
             </CardContent>
 
             <CardFooter className="flex-col items-stretch gap-3">
@@ -714,7 +770,7 @@ function EventPreview({
   return (
     <div className="flex flex-col gap-5 rounded-xl border border-border bg-[var(--paper-2)] p-5">
       {/* Cover */}
-      <div className="relative flex h-40 w-full items-end overflow-hidden rounded-lg bg-gradient-to-br from-amber-400 to-rose-500 p-4">
+      <div className="relative flex aspect-square w-full items-end overflow-hidden rounded-lg bg-gradient-to-br from-amber-400 to-rose-500 p-4">
         {cover && (
           // eslint-disable-next-line @next/next/no-img-element
           <img

@@ -5,22 +5,16 @@ export type RsvpStatus = "Going" | "Pending" | "Declined" | "Waitlist"
 // host-authored FAQ entry (stored as a JSON array on the event)
 export type Faq = { q: string; a: string }
 
-// one Q&A thread item on the public event page
-export type AnswerView = {
-  id: string
-  author: string
-  body: string
-  when: string
-  canDelete: boolean
-}
+// one answered item in a guest's questionnaire response
+export type QaPair = { q: string; a: string }
 
-export type QuestionView = {
+// a guest's questionnaire submission, as shown to the host in the dashboard
+export type ResponseView = {
   id: string
-  author: string
-  body: string
+  guest: string
+  email: string | null
   when: string
-  canDelete: boolean
-  answers: AnswerView[]
+  answers: QaPair[]
 }
 
 // normalize the JSON `faqs` column into a clean, bounded Faq[]
@@ -32,6 +26,25 @@ export function parseFaqs(raw: unknown): Faq[] {
       a: typeof (f as Faq)?.a === "string" ? (f as Faq).a : "",
     }))
     .filter((f) => f.q.trim() && f.a.trim())
+}
+
+// normalize the JSON `questionnaire` column into a clean list of question prompts
+export function parseQuestionnaire(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((q) => (typeof q === "string" ? q.trim() : ""))
+    .filter(Boolean)
+}
+
+// normalize a stored questionnaire answer payload into QaPair[]
+export function parseQaPairs(raw: unknown): QaPair[] {
+  if (!Array.isArray(raw)) return []
+  return raw
+    .map((p) => ({
+      q: typeof (p as QaPair)?.q === "string" ? (p as QaPair).q : "",
+      a: typeof (p as QaPair)?.a === "string" ? (p as QaPair).a : "",
+    }))
+    .filter((p) => p.q.trim() && p.a.trim())
 }
 
 export type EventView = {

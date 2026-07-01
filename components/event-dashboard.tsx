@@ -27,6 +27,13 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from "@/components/ui/alert-dialog"
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog"
 import { ShareDialog } from "@/components/share-dialog"
 import { Donut } from "@/components/charts"
 import { RsvpChart, type SeriesPoint } from "@/components/rsvp-chart"
@@ -35,7 +42,13 @@ import {
   rejectRsvpAction,
   deleteEventAction,
 } from "@/app/actions/events"
-import type { EventView, GuestView, RsvpStatus, ActivityView } from "@/lib/events"
+import type {
+  EventView,
+  GuestView,
+  RsvpStatus,
+  ActivityView,
+  ResponseView,
+} from "@/lib/events"
 
 const PALETTE = [
   "bg-amber-500", "bg-rose-500", "bg-indigo-500", "bg-emerald-500",
@@ -71,6 +84,7 @@ export function EventDashboard({
   timeLabel,
   daysAway,
   activity,
+  responses,
 }: {
   event: EventView
   initialGuests: GuestView[]
@@ -80,10 +94,14 @@ export function EventDashboard({
   timeLabel: string
   daysAway: number
   activity: ActivityView[]
+  responses: ResponseView[]
 }) {
   const [guests, setGuests] = React.useState<GuestView[]>(initialGuests)
   const [filter, setFilterState] = React.useState<"All" | RsvpStatus>("All")
-  const [tab, setTab] = React.useState<"Overview" | "Approval queue" | "Guest list">("Overview")
+  const [tab, setTab] = React.useState<
+    "Overview" | "Approval queue" | "Guest list" | "Responses"
+  >("Overview")
+  const [openResponse, setOpenResponse] = React.useState<ResponseView | null>(null)
   const [deleting, setDeleting] = React.useState(false)
   const [queuePage, setQueuePage] = React.useState(1)
   const [guestPage, setGuestPage] = React.useState(1)
@@ -220,7 +238,7 @@ export function EventDashboard({
 
       {/* Tabs */}
       <div className="flex gap-1 border-b border-border">
-        {(["Overview", "Approval queue", "Guest list"] as const).map((t) => (
+        {(["Overview", "Approval queue", "Guest list", "Responses"] as const).map((t) => (
           <button
             key={t}
             onClick={() => setTab(t)}
@@ -234,6 +252,16 @@ export function EventDashboard({
             {t === "Approval queue" && pending > 0 && (
               <span className="ml-1.5 rounded-full bg-amber-500/20 px-1.5 py-0.5 text-xs text-amber-700">
                 {pending}
+              </span>
+            )}
+            {t === "Responses" && responses.length > 0 && (
+              <span className="ml-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-xs text-muted-foreground">
+                {responses.length}
+              </span>
+            )}
+            {t === "Guest list" && going > 0 && (
+              <span className="ml-1.5 rounded-full bg-black/10 px-1.5 py-0.5 text-xs text-muted-foreground">
+                {going}
               </span>
             )}
           </button>
@@ -398,6 +426,64 @@ export function EventDashboard({
         />
       </section>
       )}
+
+      {/* Responses (private questionnaire answers) */}
+      {tab === "Responses" && (
+      <section className="rounded-xl border border-border bg-[var(--paper-2)] p-5">
+        <div className="mb-4">
+          <h2 className="font-semibold">Responses</h2>
+          <p className="text-sm text-muted-foreground">
+            {responses.length
+              ? `${responses.length} guest${responses.length > 1 ? "s" : ""} answered your questionnaire`
+              : "No responses yet"}
+          </p>
+        </div>
+        {responses.length > 0 && (
+          <ul className="flex flex-col divide-y divide-border">
+            {responses.map((r) => (
+              <li key={r.id}>
+                <button
+                  type="button"
+                  onClick={() => setOpenResponse(r)}
+                  className="flex w-full items-center gap-3 py-2.5 text-left transition-colors hover:bg-black/[0.03]"
+                >
+                  <Avatar name={r.guest} seed={r.id} />
+                  <span className="flex min-w-0 flex-col">
+                    <span className="text-sm font-medium">{r.guest}</span>
+                    <span className="truncate text-xs text-muted-foreground">
+                      {r.email ?? `${r.answers.length} answer${r.answers.length > 1 ? "s" : ""}`}
+                    </span>
+                  </span>
+                  <span className="ml-auto text-xs text-muted-foreground">{r.when}</span>
+                </button>
+              </li>
+            ))}
+          </ul>
+        )}
+      </section>
+      )}
+
+      {/* Response detail */}
+      <Dialog open={Boolean(openResponse)} onOpenChange={(o) => !o && setOpenResponse(null)}>
+        <DialogContent>
+          <DialogHeader>
+            <DialogTitle>{openResponse?.guest}</DialogTitle>
+            <DialogDescription>
+              {openResponse?.email
+                ? `${openResponse.email} · answered ${openResponse.when}`
+                : `Answered ${openResponse?.when}`}
+            </DialogDescription>
+          </DialogHeader>
+          <div className="flex max-h-[60vh] flex-col gap-4 overflow-y-auto">
+            {openResponse?.answers.map((qa, i) => (
+              <div key={i} className="flex flex-col gap-1">
+                <p className="text-sm font-medium text-foreground">{qa.q}</p>
+                <p className="text-sm whitespace-pre-wrap text-muted-foreground">{qa.a}</p>
+              </div>
+            ))}
+          </div>
+        </DialogContent>
+      </Dialog>
     </>
   )
 }

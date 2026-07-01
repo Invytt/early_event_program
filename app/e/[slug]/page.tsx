@@ -13,14 +13,12 @@ import {
 } from "lucide-react"
 
 import { PublicRsvp } from "@/components/public-rsvp"
-import { Questionnaire } from "@/components/questionnaire"
-import { getEventBySlug, getQuestions } from "@/lib/db"
+import { getEventBySlug, getMyResponse } from "@/lib/db"
 import {
   formatTime,
   coverGradient,
   parseFaqs,
-  relativeTime,
-  type QuestionView,
+  parseQuestionnaire,
 } from "@/lib/events"
 
 export async function generateMetadata({
@@ -68,21 +66,12 @@ export default async function PublicEventPage({
   const { event, dto, counts, myStatus } = data
   const isHost = Boolean(userId) && userId === event.ownerId
   const faqs = parseFaqs(event.faqs)
-  const questionRows = await getQuestions(event.id)
-  const questions: QuestionView[] = questionRows.map((q) => ({
-    id: q.id,
-    author: q.authorName ?? "Guest",
-    body: q.body,
-    when: relativeTime(q.createdAt),
-    canDelete: isHost || q.authorId === userId,
-    answers: q.answers.map((a) => ({
-      id: a.id,
-      author: a.authorName ?? "Guest",
-      body: a.body,
-      when: relativeTime(a.createdAt),
-      canDelete: isHost || a.authorId === userId,
-    })),
-  }))
+  const questions = parseQuestionnaire(event.questionnaire)
+  // has this signed-in guest already answered? (host never answers their own)
+  const alreadySubmitted =
+    Boolean(userId) && !isHost && questions.length > 0
+      ? Boolean(await getMyResponse(event.id, userId!))
+      : false
   const dateLabel = format(event.startsAt, "EEEE, MMMM d, yyyy")
   const time = `${String(event.startsAt.getUTCHours()).padStart(2, "0")}:${String(
     event.startsAt.getUTCMinutes()
@@ -109,7 +98,7 @@ export default async function PublicEventPage({
 
         {/* Cover */}
         <div
-          className={`relative flex h-52 w-full items-end overflow-hidden rounded-xl bg-gradient-to-br ${coverGradient(
+          className={`relative flex aspect-square w-full items-end overflow-hidden rounded-xl bg-gradient-to-br ${coverGradient(
             event.id
           )} p-5`}
         >
@@ -177,6 +166,8 @@ export default async function PublicEventPage({
           signedIn={Boolean(userId)}
           isHost={isHost}
           requireApproval={event.requireApproval}
+          questions={questions}
+          alreadyAnswered={alreadySubmitted}
         />
 
         {faqs.length > 0 && (
@@ -197,13 +188,6 @@ export default async function PublicEventPage({
             </div>
           </section>
         )}
-
-        <Questionnaire
-          eventId={event.id}
-          slug={event.slug}
-          questions={questions}
-          signedIn={Boolean(userId)}
-        />
       </div>
     </div>
   )

@@ -34,12 +34,14 @@ model Event {
   emailDecision   Boolean  @default(true) // approve/decline email to guest
   // host-authored FAQ list: [{ q: string, a: string }, ...]
   faqs            Json?
+  // host-authored questionnaire: ["question 1", "question 2", ...]
+  questionnaire   Json?
   slug            String   @unique
   createdAt       DateTime @default(now())
   updatedAt       DateTime @updatedAt
 
   rsvps     Rsvp[]
-  questions Question[]
+  responses QuestionnaireResponse[]
 
   @@index([ownerId])
 }
@@ -61,31 +63,21 @@ model Rsvp {
   @@index([userId])
 }
 
-// Open Q&A on an event: any signed-in viewer (host or guest) may post a
-// question; anyone may answer. Posts are public the moment they're created.
-model Question {
+// A guest's private answers to the host's questionnaire. Questions are public
+// on the event page; answers are visible only to the host (in the dashboard
+// responses list). One response row per guest per event (upserted).
+model QuestionnaireResponse {
   id         String   @id @default(cuid())
   eventId    String
-  authorId   String // Clerk user id of the asker
-  authorName String?
-  body       String
+  userId     String // Clerk user id of the responder
+  guestName  String?
+  guestEmail String?
+  answers    Json // [{ q: string, a: string }, ...]
   createdAt  DateTime @default(now())
+  updatedAt  DateTime @updatedAt
 
-  event   Event    @relation(fields: [eventId], references: [id], onDelete: Cascade)
-  answers Answer[]
+  event Event @relation(fields: [eventId], references: [id], onDelete: Cascade)
 
+  @@unique([eventId, userId])
   @@index([eventId])
-}
-
-model Answer {
-  id         String   @id @default(cuid())
-  questionId String
-  authorId   String // Clerk user id of the responder
-  authorName String?
-  body       String
-  createdAt  DateTime @default(now())
-
-  question Question @relation(fields: [questionId], references: [id], onDelete: Cascade)
-
-  @@index([questionId])
 }
