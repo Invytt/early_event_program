@@ -2,7 +2,7 @@ import type { Metadata } from "next"
 import Image from "next/image"
 import { notFound } from "next/navigation"
 import { format } from "date-fns"
-import { auth } from "@clerk/nextjs/server"
+import { auth, clerkClient } from "@clerk/nextjs/server"
 import {
   CalendarIcon,
   ClockIcon,
@@ -65,6 +65,18 @@ export default async function PublicEventPage({
 
   const { event, dto, counts, myStatus } = data
   const isHost = Boolean(userId) && userId === event.ownerId
+
+  // resolve the host's real display name (public viewers shouldn't see "You")
+  let hostName = "the host"
+  try {
+    const host = await (await clerkClient()).users.getUser(event.ownerId)
+    hostName =
+      [host.firstName, host.lastName].filter(Boolean).join(" ") ||
+      host.username ||
+      hostName
+  } catch {
+    /* host lookup failed — fall back to generic label */
+  }
   const faqs = parseFaqs(event.faqs)
   const questions = parseQuestionnaire(event.questionnaire)
   // has this signed-in guest already answered? (host never answers their own)
@@ -115,7 +127,7 @@ export default async function PublicEventPage({
 
         <div className="flex flex-col gap-1">
           <h1 className="text-3xl font-semibold tracking-tight">{event.name}</h1>
-          <p className="text-sm text-muted-foreground">Hosted by {dto.host}</p>
+          <p className="text-sm text-muted-foreground">Hosted by {hostName}</p>
         </div>
 
         <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
