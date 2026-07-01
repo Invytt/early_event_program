@@ -33,8 +33,8 @@ export async function generateMetadata({
   const title = event.name
   // keep it generic — never leak a hidden location in shared previews
   const description = `You're invited — ${format(event.startsAt, "EEEE, MMMM d, yyyy")}.`
-  // use the event cover when set, else fall back to the site banner
-  const image = event.coverUrl || "/og-image.png"
+  // og:image + twitter:image are supplied by ./opengraph-image (renders the
+  // event cover at 1200x630 — absolute + correctly sized so X accepts it).
   return {
     title,
     description,
@@ -42,13 +42,11 @@ export async function generateMetadata({
       title,
       description,
       type: "website",
-      images: [{ url: image }],
     },
     twitter: {
       card: "summary_large_image",
       title,
       description,
-      images: [image],
     },
   }
 }
