@@ -88,7 +88,7 @@ describe("rsvpConfirmationEmail", () => {
     vi.stubEnv("AUTOSEND_TEMPLATE1_ID", "")
     await rsvpConfirmationEmail({
       to: { email: "a@x.com", name: "A" },
-      eventId: "e1",
+      slug: "party",
       eventName: "Party",
       whenLabel: "Sat",
       pending: false,
@@ -99,7 +99,7 @@ describe("rsvpConfirmationEmail", () => {
   it("sends with event details and a deep-link cta", async () => {
     await rsvpConfirmationEmail({
       to: { email: "a@x.com", name: "A" },
-      eventId: "e1",
+      slug: "party",
       eventName: "Party",
       whenLabel: "Sat 6pm",
       pending: false,
@@ -108,7 +108,7 @@ describe("rsvpConfirmationEmail", () => {
     expect(b.templateId).toBe("tmpl_1")
     expect(b.subject).toContain("Party")
     expect(b.dynamicData.event_name).toBe("Party")
-    expect(b.dynamicData.cta_url).toContain("/dashboard/invites/e1")
+    expect(b.dynamicData.cta_url).toContain("/e/party")
   })
 })
 
@@ -116,7 +116,7 @@ describe("approvalDecisionEmail", () => {
   it("uses an approved subject + green accent when approved", async () => {
     await approvalDecisionEmail({
       to: { email: "a@x.com" },
-      eventId: "e1",
+      slug: "gala",
       eventName: "Gala",
       whenLabel: "Fri",
       approved: true,
@@ -125,19 +125,20 @@ describe("approvalDecisionEmail", () => {
     expect(b.subject).toContain("in")
     expect(b.dynamicData.accent).toBe("#15803d")
     expect(b.dynamicData.status).toContain("Approved")
+    expect(b.dynamicData.cta_url).toContain("/e/gala")
   })
 
   it("uses a rejection note + red accent when declined", async () => {
     await approvalDecisionEmail({
       to: { email: "a@x.com" },
-      eventId: "e1",
+      slug: "gala",
       eventName: "Gala",
       whenLabel: "Fri",
       approved: false,
     })
     const b = body()
     expect(b.dynamicData.accent).toBe("#b91c1c")
-    expect(b.dynamicData.cta_url).toContain("/dashboard/invites")
+    expect(b.dynamicData.cta_url).toContain("/e/gala")
   })
 })
 

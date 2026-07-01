@@ -35,7 +35,6 @@ const nav = [
   { label: "Dashboard", href: "/dashboard", d: icons.grid },
   { label: "Create Invite", href: "/dashboard/create-invite", d: icons.mailPlus },
   { label: "Your Invitations", href: "/dashboard/my-invitations", d: icons.ticket },
-  { label: "Invites", href: "/dashboard/invites", d: icons.inbox },
 ]
 
 function NavLinks({

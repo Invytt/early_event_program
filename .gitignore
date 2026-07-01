@@ -60,3 +60,8 @@ yarn-error.log*
 
 # local asset backups (not shipped)
 .backups/
+
+# tooling / agent skills (not app code)
+skills/
+.kiro/
+skills-lock.json

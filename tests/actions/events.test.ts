@@ -33,7 +33,14 @@ const {
   }
 })
 vi.mock("@clerk/nextjs/server", () => ({ auth, currentUser, clerkClient }))
-vi.mock("@/lib/db", () => ({ createEvent, setRsvpStatus, deleteEvent, upsertSelfRsvp }))
+vi.mock("@/lib/db", () => ({
+  createEvent,
+  setRsvpStatus,
+  deleteEvent,
+  upsertSelfRsvp,
+  needsQuestionnaire: vi.fn(async () => false),
+  getOwnedEvent: vi.fn(),
+}))
 vi.mock("@/lib/storage", () => ({ uploadCover, storageConfigured }))
 vi.mock("@/lib/email", () => ({ rsvpConfirmationEmail, approvalDecisionEmail, hostNewRsvpEmail }))
 

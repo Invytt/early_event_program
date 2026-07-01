@@ -85,7 +85,7 @@ const LOGO_URL = (process.env.EMAIL_LOGO_URL || `${APP_URL}/logo.png`).trim()
 
 export function rsvpConfirmationEmail(args: {
   to: Recipient
-  eventId: string
+  slug: string
   eventName: string
   whenLabel: string
   pending: boolean
@@ -109,7 +109,7 @@ export function rsvpConfirmationEmail(args: {
       lead: "your response has been successfully captured.",
       event_name: args.eventName,
       when: args.whenLabel,
-      cta_url: `${APP_URL}/dashboard/invites/${args.eventId}`,
+      cta_url: `${APP_URL}/e/${args.slug}`,
       unsubscribe: `mailto:${process.env.EMAIL_FROM || "events@invytt.com"}?subject=Unsubscribe`,
     },
   })
@@ -118,7 +118,7 @@ export function rsvpConfirmationEmail(args: {
 export function approvalDecisionEmail(args: {
   to: Recipient
   guestName?: string
-  eventId: string
+  slug: string
   eventName: string
   whenLabel: string
   approved: boolean
@@ -146,10 +146,8 @@ export function approvalDecisionEmail(args: {
       note: args.approved
         ? "Good news — the host approved your request. You’re confirmed for the event below. See you there!"
         : "The host wasn’t able to approve your request for this event this time. Thanks for your interest.",
-      cta_url: args.approved
-        ? `${APP_URL}/dashboard/invites/${args.eventId}`
-        : `${APP_URL}/dashboard/invites`,
-      cta_label: args.approved ? "View your invite" : "Browse invites",
+      cta_url: `${APP_URL}/e/${args.slug}`,
+      cta_label: args.approved ? "View event" : "View event",
       unsubscribe: `mailto:${process.env.EMAIL_FROM || "events@invytt.com"}?subject=Unsubscribe`,
     },
   })

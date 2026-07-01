@@ -182,7 +182,7 @@ async function decideRsvp(
         approvalDecisionEmail({
           to: { email, name: r.guestName ?? undefined },
           guestName: r.guestName ?? undefined,
-          eventId: r.event.id,
+          slug: r.event.slug,
           eventName: r.event.name,
           whenLabel: whenOf(r.event.startsAt),
           approved,
@@ -308,7 +308,7 @@ async function doRsvp(
       if (email && event.emailGuestRsvp) {
         await rsvpConfirmationEmail({
           to: { email, name },
-          eventId,
+          slug: event.slug,
           eventName: event.name,
           whenLabel,
           pending,
